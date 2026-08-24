@@ -49,3 +49,33 @@ The production domain is `picturesuo.com`; `www.picturesuo.com` should redirect 
 - Never commit raw journal entries, private goals, raw notecard photos, credentials, or real-time location.
 - Publish travel notes after leaving the location.
 - AI-generated text must be reviewed before it enters this repository.
+
+## What the password does
+
+The site is encrypted at build time with [StatiCrypt](https://github.com/robinmoisson/staticrypt):
+every page is AES-256 encrypted, and a visitor types the password to decrypt it
+in their own browser. `scripts/lock-site.sh` runs after the Astro build and
+fails the deploy if any page comes out unencrypted. The password lives in the
+`SITE_PASSWORD` repository secret, never in the source. `.staticrypt-salt` is
+committed on purpose — a salt is not a secret, and it has to stay the same
+across builds or unlocking one page would not unlock the next.
+
+**Be clear about what this is.** It is a gate on the pages, not access control:
+
+- **Images, PDFs, CSS and JavaScript are not encrypted.** Anything under
+  `/images/…` is still fetchable by direct URL.
+- **This repository is public.** Every post is readable in plain text right here
+  on GitHub, password or not. Making the repo private would fix that, but Pages
+  on a private repository needs a paid GitHub plan.
+- **The encrypted pages are public files.** Anyone can download one and attack
+  the password offline, at whatever rate their hardware allows.
+
+So it keeps the site out of search results and away from anyone casually
+passing by. It is not protection for anything that would actually hurt to leak.
+For real access control, put the site behind Cloudflare Access — free for up to
+50 people, real per-person sign-in — which needs the domain's nameservers moved
+to Cloudflare.
+
+Feeds and sitemaps are deleted while the site is locked, since they would list
+every title and summary straight past the password, and `robots.txt` asks
+crawlers to stay out.
