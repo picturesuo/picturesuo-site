@@ -319,14 +319,18 @@ const startLabel = fmt.format(startDate);
     aspect-ratio: 1;
     min-width: 9px;
     border-radius: 2px;
-    background: var(--paper-deep);
+    /* An empty day still has to read as a square: paper-deep alone sits about
+       5/255 from the page behind it, which makes the whole grid disappear
+       before the log has any data in it. */
+    background: color-mix(in srgb, var(--paper-deep) 74%, var(--line));
+    box-shadow: inset 0 0 0 1px rgba(23, 23, 20, 0.04);
     position: relative;
     display: flex;
     flex-direction: column-reverse;
     overflow: hidden;
   }
   .cell.before {
-    opacity: 0.4;
+    opacity: 0.6;
   }
   .cell span {
     display: block;
