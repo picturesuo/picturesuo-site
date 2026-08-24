@@ -1,0 +1,37 @@
+---
+import { getCollection, render } from 'astro:content';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { formatDate } from '../../lib/content';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('writing', ({ data }) => !data.draft);
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+---
+
+<SiteLayout title={entry.data.title} description={entry.data.summary}>
+  <article class="page-shell">
+    <header class="article-header">
+      <p class="page-kicker">{entry.data.kind}</p>
+      <h1>{entry.data.title}</h1>
+      <p class="lede">{entry.data.summary}</p>
+      <div class="entry-meta">
+        <time datetime={entry.data.publishedAt.toISOString()}
+          >{formatDate(entry.data.publishedAt)}</time
+        >{entry.data.updatedAt && <span>Updated {formatDate(entry.data.updatedAt)}</span>}
+      </div>
+    </header>
+    <div class="prose"><Content /></div>
+    {
+      entry.data.originalUrl && (
+        <p class="callout">
+          Originally published at <a href={entry.data.originalUrl}>picturesuo.wordpress.com</a>.
+          Preserved here as part of the archive.
+        </p>
+      )
+    }
+  </article>
+</SiteLayout>

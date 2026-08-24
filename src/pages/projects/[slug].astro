@@ -1,0 +1,43 @@
+---
+import { getCollection, render } from 'astro:content';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { formatDate } from '../../lib/content';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('projects', ({ data }) => !data.draft);
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+---
+
+<SiteLayout title={entry.data.title} description={entry.data.summary}>
+  <article class="page-shell">
+    <header class="article-header">
+      <p class="page-kicker">{entry.data.status} project</p><h1>{entry.data.title}</h1><p
+        class="lede"
+      >
+        {entry.data.summary}
+      </p><div class="entry-meta">
+        <time datetime={entry.data.publishedAt.toISOString()}
+          >{formatDate(entry.data.publishedAt)}</time
+        ><span>{entry.data.language}</span>
+      </div><div class="hero-actions">
+        {
+          entry.data.repoUrl && (
+            <a class="button primary" href={entry.data.repoUrl}>
+              View repository
+            </a>
+          )
+        }{
+          entry.data.demoUrl && (
+            <a class="button" href={entry.data.demoUrl}>
+              Open project
+            </a>
+          )
+        }
+      </div>
+    </header>
+    <div class="prose"><Content /></div>
+  </article>
+</SiteLayout>

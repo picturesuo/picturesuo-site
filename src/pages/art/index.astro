@@ -1,0 +1,34 @@
+---
+import { getCollection } from 'astro:content';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { newestFirst } from '../../lib/content';
+const pieces = newestFirst(await getCollection('art', ({ data }) => !data.draft));
+---
+
+<SiteLayout title="Art" description="Ceramics, objects, and process studies by Picturesuo.">
+  <div class="page-shell">
+    <header class="article-header">
+      <p class="page-kicker">Art</p><h1>Objects hold<br />the fingerprints.</h1><p class="lede">
+        Finished ceramics and works in progress. Photographed honestly, with room for texture and
+        process.
+      </p>
+    </header>
+    <div class="artifact-strip">
+      {
+        pieces.map((piece) => (
+          <a class="art-card" href={`/art/${piece.id}`}>
+            <>
+              <img src={piece.data.image} alt={piece.data.imageAlt} />
+              <footer>
+                <>
+                  <span>{piece.data.title}</span>
+                  <span>{piece.data.year}</span>
+                </>
+              </footer>
+            </>
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</SiteLayout>

@@ -1,0 +1,46 @@
+---
+import { getCollection } from 'astro:content';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { entryHref, formatDate, newestFirst, type PublicEntry } from '../lib/content';
+
+const entries: PublicEntry[] = [
+  ...(await getCollection('writing', ({ data }) => !data.draft)),
+  ...(await getCollection('projects', ({ data }) => !data.draft)),
+  ...(await getCollection('art', ({ data }) => !data.draft)),
+];
+const byYear = newestFirst(entries).reduce((groups, entry) => {
+  const year = entry.data.publishedAt.getUTCFullYear();
+  const yearEntries = groups.get(year) ?? [];
+  yearEntries.push(entry);
+  groups.set(year, yearEntries);
+  return groups;
+}, new Map<number, PublicEntry[]>());
+---
+
+<SiteLayout title="Archive" description="Everything published on Picturesuo, organized by year.">
+  <div class="page-shell">
+    <header class="article-header">
+      <p class="page-kicker">Archive</p><h1>Everything<br />kept here.</h1><p class="lede">
+        Essays, notes, projects, and objects in chronological order.
+      </p>
+    </header>
+    {
+      [...byYear.entries()].map(([year, yearEntries]) => (
+        <section class="archive-year">
+          <>
+            <h2>{year}</h2>
+            <div class="archive-items">
+              {yearEntries.map((entry) => (
+                <a class="archive-item" href={entryHref(entry)}>
+                  <time>{formatDate(entry.data.publishedAt)}</time>
+                  <strong>{entry.data.title}</strong>
+                  <span>{entry.collection}</span>
+                </a>
+              ))}
+            </div>
+          </>
+        </section>
+      ))
+    }
+  </div>
+</SiteLayout>

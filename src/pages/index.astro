@@ -1,0 +1,153 @@
+---
+import { getCollection } from 'astro:content';
+import EntryCard from '../components/EntryCard.astro';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { newestFirst } from '../lib/content';
+
+const writing = newestFirst(await getCollection('writing', ({ data }) => !data.draft)).slice(0, 3);
+const projects = newestFirst(await getCollection('projects', ({ data }) => !data.draft)).slice(
+  0,
+  3,
+);
+const art = newestFirst(await getCollection('art', ({ data }) => !data.draft)).slice(0, 2);
+---
+
+<SiteLayout
+  title="Picturesuo"
+  description="Writing, technical projects, ceramics, and observations from a life in progress."
+>
+  <div class="page-shell">
+    <section class="hero">
+      <aside class="hero-aside">
+        <p class="page-kicker">A public record</p>
+        <p>Writing, technical work, objects, and field notes. Kept slowly enough to last.</p>
+      </aside>
+      <div>
+        <p class="page-kicker">Picturesuo</p>
+        <h1>Things made,<br />learned &amp;<br />noticed.</h1>
+        <p class="lede">
+          I’m building in public across technology, writing, and ceramics—following the work
+          wherever it becomes interesting.
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="/writing">Read the writing</a>
+          <a class="button" href="/now">What I’m doing now</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section rule">
+      <div class="section-head">
+        <div class="section-label">Recent writing</div>
+        <div class="section-intro">
+          <h2>Notes become ideas.<br />Ideas become work.</h2><p class="muted">
+            Long essays sit beside short observations. The archive keeps both findable after the
+            feed moves on.
+          </p>
+        </div>
+      </div>
+      <div class="entry-grid">
+        {
+          writing.map((entry, index) => (
+            <div class:list={{ 'entry-card-wrap': true, featured: index === 0 }}>
+              <EntryCard entry={entry} eyebrow={entry.data.kind} />
+            </div>
+          ))
+        }
+      </div>
+      <div class="hero-actions"><a class="button" href="/writing">All writing</a></div>
+    </section>
+
+    <section class="section rule">
+      <div class="section-head">
+        <div class="section-label">Selected work</div>
+        <div class="section-intro"><h2>Projects are arguments<br />made concrete.</h2></div>
+      </div>
+      <div class="project-list">
+        {
+          projects.map((project) => (
+            <a class="project-row" href={`/projects/${project.id}`}>
+              <span class="card-kicker">{project.data.status}</span>
+              <h3>{project.data.title}</h3>
+              <p>{project.data.summary}</p>
+            </a>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="section rule">
+      <div class="section-head">
+        <div class="section-label">Objects</div>
+        <div class="section-intro">
+          <h2>Made by hand.</h2><p class="muted">
+            Ceramics and physical experiments, documented with the same care as software and
+            writing.
+          </p>
+        </div>
+      </div>
+      <div class="artifact-strip">
+        {
+          art.map((piece) => (
+            <a class="art-card" href={`/art/${piece.id}`}>
+              <img src={piece.data.image} alt={piece.data.imageAlt} loading="lazy" />
+              <footer>
+                <>
+                  <span>{piece.data.title}</span>
+                  <span>{piece.data.medium}</span>
+                </>
+              </footer>
+            </a>
+          ))
+        }
+      </div>
+      <div class="hero-actions"><a class="button" href="/art">Enter the gallery</a></div>
+    </section>
+
+    <section class="section rule">
+      <div class="section-head">
+        <div class="section-label">Current portfolio</div>
+        <div class="section-intro">
+          <h2>Direction without rigidity.</h2><p class="lede">
+            Two goals, a few constraints, and room for good opportunities.
+          </p>
+        </div>
+      </div>
+      <div class="split">
+        <div class="callout">
+          <strong>Now</strong><p>
+            Launching this archive, developing a sustainable public-writing practice, and
+            documenting technical and physical work.
+          </p><a href="/now">Read the current focus →</a>
+        </div>
+        <div class="callout">
+          <strong>Progress</strong><p>
+            A small public record of shipped work and opportunity bets—not a performance dashboard.
+          </p><a href="/progress">View the public log →</a>
+        </div>
+      </div>
+    </section>
+  </div>
+</SiteLayout>
+
+<style>
+  .entry-card-wrap {
+    display: contents;
+  }
+  .entry-card-wrap.featured :global(.entry-card) {
+    grid-column: span 2;
+    min-height: 340px;
+    background: var(--ink);
+    color: white;
+  }
+  .entry-card-wrap.featured :global(.entry-meta),
+  .entry-card-wrap.featured :global(p),
+  .entry-card-wrap.featured :global(.tag-list li) {
+    color: #c8c7bf;
+  }
+  @media (max-width: 600px) {
+    .entry-card-wrap.featured :global(.entry-card) {
+      grid-column: auto;
+    }
+  }
+</style>

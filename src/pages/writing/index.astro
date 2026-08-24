@@ -1,0 +1,54 @@
+---
+import { getCollection } from 'astro:content';
+import EntryCard from '../../components/EntryCard.astro';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { newestFirst } from '../../lib/content';
+
+const entries = newestFirst(await getCollection('writing', ({ data }) => !data.draft));
+const essays = entries.filter(({ data }) => data.kind === 'essay');
+const notes = entries.filter(({ data }) => data.kind !== 'essay');
+---
+
+<SiteLayout title="Writing" description="Essays, notes, and field observations from Picturesuo.">
+  <div class="page-shell">
+    <header class="article-header">
+      <p class="page-kicker">Writing</p>
+      <h1>Long arguments.<br />Short discoveries.</h1>
+      <p class="lede">
+        The website holds the durable version. Selected ideas may travel to X, but they start and
+        remain here.
+      </p>
+    </header>
+    <section class="section">
+      <div class="section-head">
+        <div class="section-label">Essays</div><p class="section-intro muted">
+          Ideas developed far enough to deserve a permanent address.
+        </p>
+      </div>
+      <div class="entry-grid">
+        {essays.map((entry) => <EntryCard entry={entry} eyebrow="Essay" />)}
+      </div>
+    </section>
+    {
+      notes.length > 0 && (
+        <section class="section rule">
+          <>
+            <div class="section-head">
+              <>
+                <div class="section-label">Notes &amp; field notes</div>
+                <p class="section-intro muted">
+                  Smaller observations, project updates, and lessons from places.
+                </p>
+              </>
+            </div>
+            <div class="entry-grid">
+              {notes.map((entry) => (
+                <EntryCard entry={entry} eyebrow={entry.data.kind} />
+              ))}
+            </div>
+          </>
+        </section>
+      )
+    }
+  </div>
+</SiteLayout>

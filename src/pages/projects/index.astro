@@ -1,0 +1,31 @@
+---
+import { getCollection } from 'astro:content';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { newestFirst } from '../../lib/content';
+const projects = newestFirst(await getCollection('projects', ({ data }) => !data.draft));
+---
+
+<SiteLayout title="Projects" description="Selected software and creative projects by Picturesuo.">
+  <div class="page-shell">
+    <header class="article-header">
+      <p class="page-kicker">Projects</p><h1>Things that work<br />in the world.</h1><p
+        class="lede"
+      >
+        Selected technical and creative projects, with the decisions and lessons behind them.
+      </p>
+    </header>
+    <div class="project-list">
+      {
+        projects.map((project) => (
+          <a class="project-row" href={`/projects/${project.id}`}>
+            <>
+              <span class="card-kicker">{project.data.status}</span>
+              <h3>{project.data.title}</h3>
+              <p>{project.data.summary}</p>
+            </>
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</SiteLayout>

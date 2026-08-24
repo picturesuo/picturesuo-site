@@ -1,0 +1,29 @@
+---
+import type { PublicEntry } from '../lib/content';
+import { entryHref, formatDate } from '../lib/content';
+
+interface Props {
+  entry: PublicEntry;
+  eyebrow?: string;
+}
+const { entry, eyebrow } = Astro.props;
+---
+
+<article class="entry-card">
+  <div class="entry-meta">
+    <span>{eyebrow ?? entry.collection}</span>
+    <time datetime={entry.data.publishedAt.toISOString()}>{formatDate(entry.data.publishedAt)}</time
+    >
+  </div>
+  <h3><a href={entryHref(entry)}>{entry.data.title}</a></h3>
+  <p>{entry.data.summary}</p>
+  {
+    entry.data.tags.length > 0 && (
+      <ul class="tag-list" aria-label="Topics">
+        {entry.data.tags.map((tag) => (
+          <li>{tag}</li>
+        ))}
+      </ul>
+    )
+  }
+</article>

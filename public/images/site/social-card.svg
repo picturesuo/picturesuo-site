@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f3f0e8"/>
+  <circle cx="1050" cy="90" r="240" fill="#dceef4"/>
+  <path d="M70 90H1130" stroke="#d4cec0"/>
+  <text x="70" y="145" fill="#0b87b7" font-family="Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="4">PICTURESUO</text>
+  <text x="70" y="320" fill="#171714" font-family="Georgia, serif" font-size="82">Things made,</text>
+  <text x="70" y="412" fill="#171714" font-family="Georgia, serif" font-size="82">learned &amp; noticed.</text>
+  <text x="72" y="525" fill="#696861" font-family="Arial, sans-serif" font-size="27">Writing · projects · ceramics · field notes</text>
+</svg>

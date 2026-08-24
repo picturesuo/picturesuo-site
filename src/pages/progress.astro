@@ -1,0 +1,86 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { currentCycle, progressItems, progressLegend } from '../data/progress';
+const format = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+---
+
+<SiteLayout
+  title="Progress"
+  description="A small public record of goals, constraints, opportunity bets, and shipped work."
+>
+  <div class="page-shell">
+    <header class="article-header">
+      <p class="page-kicker">Public progress · {currentCycle.label}</p><h1>
+        A record,<br />not a score.
+      </h1><p class="lede">
+        This page shows selected goals and meaningful changes. The complete daily log stays private.
+      </p>
+    </header>
+    <section class="section">
+      <div class="split">
+        <div>
+          <p class="section-label">Active goals</p><ol class="prose">
+            {currentCycle.goals.map((goal) => <li>{goal}</li>)}
+          </ol>
+        </div>
+        <div>
+          <p class="section-label">Constraints / anti-goals</p><ul class="prose">
+            {currentCycle.constraints.map((constraint) => <li>{constraint}</li>)}
+          </ul>
+        </div>
+      </div>
+      <p class="callout">
+        A goal names an outcome. A constraint names what you refuse to sacrifice. An opportunity bet
+        is a capped experiment with uncertain upside. “Anti-goal” is used here as a constraint—not
+        as a concept from Marc Andreessen’s guide.
+      </p>
+    </section>
+    <section class="section rule">
+      <div class="section-head">
+        <div class="section-label">Calendar key</div><p class="section-intro muted">
+          Colors describe why time exists. They do not judge whether the day was good.
+        </p>
+      </div>
+      <div class="calendar-legend">
+        {
+          progressLegend.map((item) => (
+            <div class="legend" data-kind={item.kind}>
+              <>
+                <strong>{item.label}</strong>
+                <span>{item.description}</span>
+              </>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+    <section class="section rule">
+      <div class="section-head">
+        <div class="section-label">Selected log</div><p class="section-intro muted">
+          Public-safe milestones only. No real-time location, private relationship notes, health
+          information, or raw journal text.
+        </p>
+      </div>
+      <div class="progress-feed">
+        {
+          progressItems.toReversed().map((item) => (
+            <article class="progress-item">
+              <>
+                <time datetime={item.date}>
+                  {format.format(new Date(`${item.date}T00:00:00Z`))}
+                </time>
+                <span class:list={['kind', item.kind]}>{item.kind}</span>
+                <p>{item.href ? <a href={item.href}>{item.label}</a> : item.label}</p>
+              </>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+  </div>
+</SiteLayout>
