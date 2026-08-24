@@ -1,0 +1,404 @@
+---
+/**
+ * One calendar for the whole record: every track at once, or one at a time.
+ *
+ * A day is a square that fills from the bottom in the colours of what actually
+ * happened, so height reads as how full the day was and the bands read as what
+ * it was made of. Filtering to a single track switches to a plain intensity
+ * ramp in that track's colour.
+ *
+ * Anti-goals are drawn as a slash, never a colour — coral already means clay,
+ * and a broken rule should survive every filter instead of hiding in a week
+ * that otherwise looks busy.
+ */
+import log from '../data/log.json';
+
+interface Props {
+  start?: string;
+  weeks?: number;
+}
+const { start = '2026-09-01', weeks = 30 } = Astro.props;
+
+const TRACKS = [
+  { k: 'writing', n: 'Writing', c: 'var(--green)' },
+  { k: 'tech', n: 'Technical', c: 'var(--blue)' },
+  { k: 'clay', n: 'Clay', c: 'var(--coral)' },
+  { k: 'photos', n: 'Photos', c: 'var(--amber)' },
+  { k: 'posts', n: 'Posts', c: 'var(--plum)' },
+];
+
+type Entry = Record<string, number | string | boolean>;
+const entries = log as Entry[];
+
+// Build the day grid at build time: no runtime fetch, no layout shift.
+const byDate = new Map<string, Entry>();
+for (const e of entries) byDate.set(String(e.date), e);
+
+const startDate = new Date(`${start}T00:00:00Z`);
+const back = (startDate.getUTCDay() + 6) % 7; // grid opens on a Monday
+const first = new Date(startDate.getTime() - back * 86400000);
+
+const days = Array.from({ length: weeks * 7 }, (_, i) => {
+  const d = new Date(first.getTime() + i * 86400000);
+  const date = d.toISOString().slice(0, 10);
+  const e = byDate.get(date);
+  const vals: Record<string, number> = {};
+  let total = 0;
+  for (const t of TRACKS) {
+    const v = e ? Number(e[t.k] ?? 0) : 0;
+    vals[t.k] = v;
+    total += v;
+  }
+  return { date, before: date < start, vals, total, flag: Boolean(e && e.flag) };
+});
+
+const logged = days.filter((d) => !d.before && d.total > 0).length;
+const fmt = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+const startLabel = fmt.format(startDate);
+---
+
+<div class="cal" data-start={start}>
+  <div class="chips" role="group" aria-label="Filter the calendar by track">
+    <button type="button" class="chip on" data-k="all" aria-pressed="true">
+      <i class="dot all"></i>All together
+    </button>
+    {
+      TRACKS.map((t) => (
+        <button type="button" class="chip" data-k={t.k} aria-pressed="false">
+          <i class="dot" style={`background:${t.c}`}></i>
+          {t.n}
+        </button>
+      ))
+    }
+  </div>
+
+  <div class="gridwrap">
+    <div class="grid" role="img" aria-label="Activity calendar, all tracks">
+      {
+        days.map((d) => (
+          <i
+            class:list={['cell', { flag: d.flag, before: d.before }]}
+            data-date={d.date}
+            data-total={d.total}
+            data-vals={JSON.stringify(d.vals)}
+            title={
+              (d.total
+                ? `${fmt.format(new Date(`${d.date}T00:00:00Z`))} — ` +
+                  TRACKS.filter((t) => d.vals[t.k])
+                    .map((t) => `${t.n.toLowerCase()} ${d.vals[t.k]}`)
+                    .join(' · ')
+                : `${fmt.format(new Date(`${d.date}T00:00:00Z`))} — nothing logged`) +
+              (d.flag ? ' · anti-goal' : '')
+            }
+          >
+            {d.total > 0 &&
+              TRACKS.filter((t) => d.vals[t.k]).map((t) => (
+                <span
+                  style={`height:${((d.vals[t.k] / d.total) * Math.min(1, d.total / 11) * 100).toFixed(2)}%;background:${t.c}`}
+                ></span>
+              ))}
+          </i>
+        ))
+      }
+    </div>
+  </div>
+
+  <div class="calfoot">
+    <div class="legend-row" data-mode="all">
+      {
+        TRACKS.map((t) => (
+          <span>
+            <i class="sw" style={`background:${t.c}`}></i>
+            {t.n}
+          </span>
+        ))
+      }
+      <span><i class="sw slash"></i>anti-goal</span>
+    </div>
+    <div class="stats">
+      {
+        logged > 0 ? (
+          <span>
+            <b>{logged}</b> days logged
+          </span>
+        ) : (
+          <span>starts {startLabel}</span>
+        )
+      }
+    </div>
+  </div>
+</div>
+
+<script>
+  const TRACKS = [
+    { k: 'writing', n: 'Writing', c: 'var(--green)' },
+    { k: 'tech', n: 'Technical', c: 'var(--blue)' },
+    { k: 'clay', n: 'Clay', c: 'var(--coral)' },
+    { k: 'photos', n: 'Photos', c: 'var(--amber)' },
+    { k: 'posts', n: 'Posts', c: 'var(--plum)' },
+  ];
+  const RAMP = [0, 28, 50, 74, 100];
+
+  document.querySelectorAll<HTMLElement>('.cal').forEach((cal) => {
+    const start = cal.dataset.start || '';
+    const cells = Array.from(cal.querySelectorAll<HTMLElement>('.cell'));
+    const chips = Array.from(cal.querySelectorAll<HTMLButtonElement>('.chip'));
+    const grid = cal.querySelector<HTMLElement>('.grid');
+    const legend = cal.querySelector<HTMLElement>('.legend-row');
+    const stats = cal.querySelector<HTMLElement>('.stats');
+
+    const data = cells.map((c) => ({
+      el: c,
+      date: c.dataset.date || '',
+      total: Number(c.dataset.total || 0),
+      vals: JSON.parse(c.dataset.vals || '{}') as Record<string, number>,
+      flag: c.classList.contains('flag'),
+      before: c.classList.contains('before'),
+    }));
+
+    const label = (d: string) =>
+      new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+        .format(new Date(`${d}T00:00:00Z`));
+
+    function render(mode: string) {
+      const track = TRACKS.find((t) => t.k === mode);
+      data.forEach((d) => {
+        d.el.innerHTML = '';
+        d.el.style.background = '';
+        if (mode === 'all') {
+          if (d.total > 0) {
+            const fill = Math.min(1, d.total / 11);
+            TRACKS.forEach((t) => {
+              const v = d.vals[t.k] || 0;
+              if (!v) return;
+              const s = document.createElement('span');
+              s.style.height = ((v / d.total) * fill * 100).toFixed(2) + '%';
+              s.style.background = t.c;
+              d.el.appendChild(s);
+            });
+          }
+          d.el.title =
+            `${label(d.date)} — ` +
+            (d.total
+              ? TRACKS.filter((t) => d.vals[t.k]).map((t) => `${t.n.toLowerCase()} ${d.vals[t.k]}`).join(' · ')
+              : 'nothing logged') +
+            (d.flag ? ' · anti-goal' : '');
+        } else if (track) {
+          const v = d.vals[mode] || 0;
+          if (v) d.el.style.background = `color-mix(in srgb, ${track.c} ${RAMP[v]}%, var(--paper-deep))`;
+          d.el.title = `${label(d.date)} — ${track.n.toLowerCase()} ${v}` + (d.flag ? ' · anti-goal' : '');
+        }
+      });
+
+      if (grid) grid.setAttribute('aria-label', (track ? track.n : 'All tracks') + ' activity calendar');
+
+      if (legend) {
+        let html = '';
+        if (mode === 'all') {
+          TRACKS.forEach((t) => {
+            html += `<span><i class="sw" style="background:${t.c}"></i>${t.n}</span>`;
+          });
+        } else if (track) {
+          html = '<span><i class="sw" style="background:var(--paper-deep)"></i>none</span>';
+          [28, 50, 74, 100].forEach((p, i) => {
+            html += `<span><i class="sw" style="background:color-mix(in srgb, ${track.c} ${p}%, var(--paper-deep))"></i>${i === 3 ? 'a lot' : ''}</span>`;
+          });
+        }
+        html += '<span><i class="sw slash"></i>anti-goal</span>';
+        legend.innerHTML = html;
+      }
+
+      if (stats) {
+        const live = data.filter((d) => !d.before);
+        const active = (d: (typeof data)[number]) => (mode === 'all' ? d.total > 0 : (d.vals[mode] || 0) > 0);
+        let run = 0,
+          best = 0,
+          count = 0;
+        live.forEach((d) => {
+          if (active(d)) {
+            run++;
+            count++;
+            if (run > best) best = run;
+          } else run = 0;
+        });
+        const flags = live.filter((d) => d.flag).length;
+        stats.innerHTML = count
+          ? `<span><b>${count}</b> days logged</span><span>streak <b>${run}</b></span>` +
+            `<span>longest <b>${best}</b></span><span><b>${flags}</b> slashed</span>`
+          : `<span>starts ${label(start)}</span>`;
+      }
+    }
+
+    chips.forEach((b) => {
+      b.addEventListener('click', () => {
+        chips.forEach((o) => {
+          o.classList.toggle('on', o === b);
+          o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
+        });
+        render(b.dataset.k || 'all');
+      });
+    });
+  });
+</script>
+
+<style>
+  .cal {
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 4px;
+    padding: 1rem;
+    margin: 1.5rem 0;
+  }
+  .chips {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+  }
+  .chip {
+    font-family: inherit;
+    font-size: 0.85rem;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 0.22rem 0.7rem 0.22rem 0.5rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    line-height: 1.3;
+  }
+  .chip:hover {
+    color: var(--ink);
+    border-color: var(--muted);
+  }
+  .chip.on {
+    color: var(--ink);
+    border-color: var(--ink);
+    background: rgba(255, 255, 255, 0.75);
+  }
+  .chip:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+  .dot {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 2px;
+    flex: none;
+    display: inline-block;
+  }
+  .dot.all {
+    background: linear-gradient(
+      135deg,
+      var(--green) 0 20%,
+      var(--blue) 20% 40%,
+      var(--coral) 40% 60%,
+      var(--amber) 60% 80%,
+      var(--plum) 80% 100%
+    );
+  }
+  .gridwrap {
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+  }
+  .grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(7, 1fr);
+    gap: 3px;
+    min-width: 27rem;
+  }
+  .cell {
+    aspect-ratio: 1;
+    min-width: 9px;
+    border-radius: 2px;
+    background: var(--paper-deep);
+    position: relative;
+    display: flex;
+    flex-direction: column-reverse;
+    overflow: hidden;
+  }
+  .cell.before {
+    opacity: 0.4;
+  }
+  .cell span {
+    display: block;
+    width: 100%;
+  }
+  .cell.flag::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      transparent 38%,
+      var(--ink) 38%,
+      var(--ink) 62%,
+      transparent 62%
+    );
+    opacity: 0.72;
+  }
+  .calfoot {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .legend-row {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .legend-row span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .sw {
+    width: 0.72rem;
+    height: 0.72rem;
+    border-radius: 2px;
+    display: inline-block;
+    flex: none;
+  }
+  .sw.slash {
+    background: var(--paper-deep);
+    position: relative;
+    overflow: hidden;
+  }
+  .sw.slash::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      transparent 38%,
+      var(--ink) 38%,
+      var(--ink) 62%,
+      transparent 62%
+    );
+    opacity: 0.72;
+  }
+  .stats {
+    display: flex;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .stats b {
+    color: var(--ink);
+    font-weight: 700;
+  }
+</style>

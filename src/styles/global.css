@@ -28,12 +28,12 @@ body {
     linear-gradient(rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.28)),
     radial-gradient(circle at 12% 10%, rgba(11, 135, 183, 0.08), transparent 29%), var(--paper);
   font-family:
-    Inter,
-    ui-sans-serif,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+    Georgia,
+    'Iowan Old Style',
+    'Palatino Linotype',
+    Palatino,
+    'Times New Roman',
+    serif;
   line-height: 1.62;
 }
 

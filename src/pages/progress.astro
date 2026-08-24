@@ -1,5 +1,6 @@
 ---
 import SiteLayout from '../layouts/SiteLayout.astro';
+import ActivityCalendar from '../components/ActivityCalendar.astro';
 import { currentCycle, progressItems, progressLegend } from '../data/progress';
 const format = new Intl.DateTimeFormat('en-US', {
   month: 'short',
@@ -42,22 +43,18 @@ const format = new Intl.DateTimeFormat('en-US', {
     </section>
     <section class="section rule">
       <div class="section-head">
-        <div class="section-label">Calendar key</div><p class="section-intro muted">
-          Colors describe why time exists. They do not judge whether the day was good.
+        <div class="section-label">The calendar</div><p class="section-intro muted">
+          One square per day, filling from the bottom in the colours of what actually happened.
+          Height is how full the day was; the bands are what it was made of. Use the chips to look
+          at a single track. A slash means I broke one of my own constraints that day — drawn rather
+          than coloured, so it survives every filter and cannot pass for a productive day.
         </p>
       </div>
-      <div class="calendar-legend">
-        {
-          progressLegend.map((item) => (
-            <div class="legend" data-kind={item.kind}>
-              <>
-                <strong>{item.label}</strong>
-                <span>{item.description}</span>
-              </>
-            </div>
-          ))
-        }
-      </div>
+      <ActivityCalendar start="2026-09-01" weeks={30} />
+      <p class="callout">
+        Colours describe where the time went, not whether the day was good. The daily card behind
+        this stays private; only these counts reach the page.
+      </p>
     </section>
     <section class="section rule">
       <div class="section-head">
