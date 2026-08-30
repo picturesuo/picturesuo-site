@@ -88,11 +88,35 @@ const manifest = {
         meta: `${d.entry.data.year} · ${d.entry.data.medium}`,
         summary: d.entry.data.summary,
         bodyId: d.bodyId,
+        heroImage: d.entry.data.image
+          ? { src: d.entry.data.image, alt: d.entry.data.imageAlt ?? '' }
+          : undefined,
       })),
     },
-    { key: 'now', label: 'Now', kind: 'doc', icon: '☀️', accent: 'var(--amber)', bodyId: 'doc-now' },
-    { key: 'about', label: 'About', kind: 'doc', icon: '👤', accent: 'var(--plum)', bodyId: 'doc-about' },
-    { key: 'progress', label: 'Progress', kind: 'doc', icon: '📊', accent: 'var(--blue-dark)', bodyId: 'doc-progress' },
+    {
+      key: 'now',
+      label: 'Now',
+      kind: 'doc',
+      icon: '☀️',
+      accent: 'var(--amber)',
+      bodyId: 'doc-now',
+    },
+    {
+      key: 'about',
+      label: 'About',
+      kind: 'doc',
+      icon: '👤',
+      accent: 'var(--plum)',
+      bodyId: 'doc-about',
+    },
+    {
+      key: 'progress',
+      label: 'Progress',
+      kind: 'doc',
+      icon: '📊',
+      accent: 'var(--blue-dark)',
+      bodyId: 'doc-progress',
+    },
   ],
 };
 
@@ -147,8 +171,8 @@ const exploreLinks = [
         <h2>Step into the studio</h2>
         <p class="st-enter-lede">
           A sunlit room of writing, code, and clay. Walk around and look at the framed pages, the
-          shelves, the corkboard, and the desk — each opens something to read. Or sit at the computer
-          for everything at once.
+          shelves, the corkboard, and the desk — each opens something to read. Or sit at the
+          computer for everything at once.
         </p>
         <div class="st-enter-actions">
           <button class="st-btn primary st-walk-only" type="button" data-action="walk">
@@ -160,7 +184,9 @@ const exploreLinks = [
           Mouse to look · <b>W A S D</b> to move · <b>E</b> or click to use what you’re looking at ·
           <b>Esc</b> to step back
         </p>
-        <button class="st-plainly" type="button" data-action="plainly">Read plainly instead →</button>
+        <button class="st-plainly" type="button" data-action="plainly"
+          >Read plainly instead →</button
+        >
       </div>
     </div>
 
@@ -169,7 +195,14 @@ const exploreLinks = [
       <div class="st-use-hint" data-use-hint>
         Click or press <b>E</b> to use the computer
       </div>
-      <div class="st-move-hint">WASD to move · mouse to look · Esc to step back</div>
+      <div class="st-move-hint">
+        <b>WASD</b> move · <b>Shift</b> sprint · <b>Space</b> jump · <b>1–6</b> shortcuts · <b
+          >Esc</b
+        >
+        step back
+      </div>
+      <!-- Minecraft-style hotbar; slots are built from the app manifest in world.ts. -->
+      <div class="st-hotbar" data-hotbar></div>
     </div>
 
     <div class="os" data-os hidden>
@@ -261,7 +294,7 @@ const exploreLinks = [
     </div>
   </div>
 
-  <script is:inline type="application/json" data-os-manifest set:html={manifestJson}></script>
+  <script is:inline type="application/json" data-os-manifest set:html={manifestJson} />
 </div>
 
 <script>
@@ -506,26 +539,60 @@ const exploreLinks = [
   .st-hud[hidden] {
     display: none;
   }
+  /* Minecraft-style crosshair: a small white "+" built from two bars, each with a
+     dark outline so it stays readable on any part of the room. When the crosshair
+     is over a usable hotspot it thickens, tints warm, and scales up a touch. */
   .st-reticle {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 10px;
-    height: 10px;
+    width: 22px;
+    height: 22px;
     transform: translate(-50%, -50%);
-    border: 2px solid rgba(255, 255, 255, 0.85);
-    border-radius: 50%;
-    box-shadow: 0 0 0 1px rgba(23, 23, 20, 0.35);
+    transition: transform 0.12s ease;
+  }
+  .st-reticle::before,
+  .st-reticle::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    background: #fff;
+    border-radius: 1px;
+    box-shadow: 0 0 0 1px rgba(20, 18, 16, 0.55);
     transition:
-      width 0.15s ease,
-      height 0.15s ease,
-      background-color 0.15s ease;
+      width 0.12s ease,
+      height 0.12s ease,
+      background-color 0.12s ease,
+      box-shadow 0.12s ease;
+  }
+  .st-reticle::before {
+    /* vertical bar */
+    width: 2px;
+    height: 14px;
+    transform: translate(-50%, -50%);
+  }
+  .st-reticle::after {
+    /* horizontal bar */
+    width: 14px;
+    height: 2px;
+    transform: translate(-50%, -50%);
   }
   .st-hud.can-use .st-reticle {
-    width: 16px;
-    height: 16px;
-    background: rgba(255, 244, 224, 0.5);
-    border-color: #fff;
+    transform: translate(-50%, -50%) scale(1.24);
+  }
+  .st-hud.can-use .st-reticle::before,
+  .st-hud.can-use .st-reticle::after {
+    background: #ffe6bf;
+    box-shadow:
+      0 0 0 1px rgba(20, 18, 16, 0.72),
+      0 0 6px rgba(255, 200, 130, 0.7);
+  }
+  .st-hud.can-use .st-reticle::before {
+    width: 3px;
+  }
+  .st-hud.can-use .st-reticle::after {
+    height: 3px;
   }
   .st-use-hint {
     position: absolute;
@@ -551,7 +618,7 @@ const exploreLinks = [
   .st-move-hint {
     position: absolute;
     left: 50%;
-    bottom: 22px;
+    bottom: 92px; /* sit just above the hotbar */
     transform: translateX(-50%);
     padding: 7px 14px;
     background: rgba(243, 240, 232, 0.82);
@@ -559,6 +626,101 @@ const exploreLinks = [
     border-radius: 999px;
     font-size: 0.8rem;
     letter-spacing: 0.02em;
+    white-space: nowrap;
+    max-width: 94vw;
+  }
+  .st-move-hint b {
+    color: var(--ink);
+  }
+
+  /* --- Hotbar (Minecraft-style content launcher) --------------------------- */
+  .st-hotbar {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    padding: 6px;
+    border-radius: 12px;
+    background: rgba(23, 23, 20, 0.5);
+    box-shadow:
+      0 12px 30px -18px rgba(0, 0, 0, 0.85),
+      inset 0 0 0 1px rgba(255, 250, 240, 0.08);
+    backdrop-filter: blur(5px);
+    /* The HUD is click-through; only the slots re-enable pointer events. */
+    pointer-events: none;
+  }
+  .st-hotbar:empty {
+    display: none;
+  }
+  .st-slot {
+    position: relative;
+    width: 58px;
+    height: 58px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 0;
+    border: 1px solid rgba(255, 250, 240, 0.14);
+    border-radius: 9px;
+    background: rgba(38, 34, 28, 0.72);
+    color: #f3f0e8;
+    font-family: Georgia, 'Times New Roman', serif;
+    cursor: pointer;
+    pointer-events: auto;
+    transition:
+      transform 0.14s ease,
+      border-color 0.14s ease,
+      background-color 0.14s ease,
+      box-shadow 0.14s ease;
+  }
+  .st-slot:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent, var(--blue));
+    background: rgba(48, 43, 35, 0.85);
+  }
+  .st-slot-num {
+    position: absolute;
+    top: 3px;
+    left: 5px;
+    font-size: 0.62rem;
+    font-weight: 800;
+    color: rgba(243, 240, 232, 0.6);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .st-slot-ico {
+    font-size: 1.5rem;
+    line-height: 1;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  }
+  .st-slot-label {
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: rgba(243, 240, 232, 0.7);
+  }
+  .st-slot.is-selected {
+    border-color: #fff;
+    background: rgba(60, 54, 44, 0.95);
+    box-shadow:
+      0 0 0 2px var(--accent, var(--amber)),
+      0 8px 20px -10px rgba(0, 0, 0, 0.7);
+    transform: translateY(-3px);
+  }
+  .st-slot.is-selected .st-slot-label,
+  .st-slot.is-selected .st-slot-num {
+    color: #fff;
+  }
+  @media (max-width: 760px) {
+    /* Belt-and-suspenders: walking (and thus the HUD) never boots this small. */
+    .st-hotbar {
+      display: none;
+    }
   }
 
   /* --- The in-world OS ----------------------------------------------------- */
@@ -1027,6 +1189,28 @@ const exploreLinks = [
     font-size: clamp(15px, 2.1cqw, 18px);
     color: var(--ink);
     -webkit-overflow-scrolling: touch;
+  }
+  /* "← Back to the list" affordance shown when a hotbar collection opens an entry. */
+  .st-panel-back {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 1.2em;
+    padding: 6px 13px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--blue-dark);
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 750;
+    cursor: pointer;
+    transition:
+      background-color 0.16s ease,
+      border-color 0.16s ease;
+  }
+  .st-panel-back:hover {
+    border-color: var(--accent, var(--blue));
+    background: #fff;
   }
   /* Ceramic/photo hero image at the top of an art reader panel. */
   .os-hero-fig {

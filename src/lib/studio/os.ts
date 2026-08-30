@@ -18,6 +18,8 @@ export interface OSEntry {
   meta?: string;
   summary?: string;
   bodyId: string;
+  /** Optional local image rendered at the top of the reader (e.g. a ceramic photo). */
+  heroImage?: { src: string; alt?: string };
 }
 
 export interface OSApp {
@@ -66,8 +68,25 @@ export interface PanelDocSource {
   heroImage?: { src: string; alt?: string };
 }
 
+/**
+ * A collection shown in the in-world panel: a scannable list of entries (reusing
+ * the seated desktop's list styling) where picking one renders that entry's
+ * reader in place, with a "back to the list" affordance. This is what the walking
+ * HUD hotbar opens for the multi-entry apps (Writing / Projects / Art).
+ */
+export interface PanelCollectionSource {
+  kind: 'collection';
+  title: string;
+  accent: string;
+  icon?: string; // emoji glyph shown in the list header kicker
+  entries: OSEntry[];
+  empty?: string;
+}
+
+export type PanelSource = PanelDocSource | PanelCollectionSource;
+
 export interface PanelHandle {
-  open: (source: PanelDocSource) => void;
+  open: (source: PanelSource) => void;
   close: () => void;
   isOpen: () => boolean;
   destroy: () => void;
@@ -243,7 +262,7 @@ export function createOS(opts: OSOptions): OSHandle {
 
   const openReader = (entry: OSEntry, accent: string) => {
     const body = openWindow(`reader:${entry.bodyId}`, entry.title, accent);
-    renderReaderInto(body, entry, getBody);
+    renderReaderInto(body, entry, getBody, { heroImage: entry.heroImage });
   };
 
   const openCollection = (app: OSApp) => {
@@ -269,10 +288,7 @@ export function createOS(opts: OSOptions): OSHandle {
 
   const openApp = (app: OSApp) => {
     if (app.kind === 'doc' && app.bodyId) {
-      openReader(
-        { title: app.label, date: '', bodyId: app.bodyId, meta: app.label },
-        app.accent,
-      );
+      openReader({ title: app.label, date: '', bodyId: app.bodyId, meta: app.label }, app.accent);
     } else {
       openCollection(app);
     }
@@ -357,7 +373,7 @@ export function createReaderPanel(opts: {
     onClose();
   };
 
-  const open = (source: PanelDocSource) => {
+  const open = (source: PanelSource) => {
     layer.textContent = '';
 
     const backdrop = el('div', 'st-panel-backdrop');
@@ -365,7 +381,7 @@ export function createReaderPanel(opts: {
     card.style.setProperty('--accent', source.accent || 'var(--blue)');
 
     const head = el('div', 'st-panel-head');
-    head.append(el('span', 'st-panel-eyebrow', "Ben’s Studio"));
+    head.append(el('span', 'st-panel-eyebrow', 'Ben’s Studio'));
     const closeBtn = el('button', 'st-panel-close');
     closeBtn.type = 'button';
     closeBtn.textContent = 'Close ✕';
@@ -373,18 +389,69 @@ export function createReaderPanel(opts: {
     head.append(closeBtn);
 
     const bodyWrap = el('div', 'st-panel-body');
-    renderReaderInto(
-      bodyWrap,
-      {
-        title: source.title,
-        meta: source.meta,
-        date: source.date,
-        summary: source.summary,
-        bodyId: source.bodyId,
-      },
-      getBody,
-      { heroImage: source.heroImage },
-    );
+
+    if (source.kind === 'collection') {
+      // A list of entries; clicking one renders its reader in place with a way back.
+      const renderList = () => {
+        bodyWrap.textContent = '';
+        bodyWrap.classList.remove('os-reader');
+        bodyWrap.classList.add('os-panel-collection');
+        const listHead = el('header', 'os-reader-head');
+        listHead.appendChild(
+          el(
+            'p',
+            'os-reader-kicker',
+            source.icon ? `${source.icon} ${source.title}` : source.title,
+          ),
+        );
+        listHead.appendChild(el('h1', undefined, source.title));
+        bodyWrap.appendChild(listHead);
+        const list = el('div', 'os-list');
+        const entries = source.entries ?? [];
+        if (entries.length === 0) {
+          list.appendChild(el('p', 'os-empty', source.empty ?? 'Nothing here yet.'));
+        }
+        for (const entry of entries) {
+          const row = el('button', 'os-row');
+          row.type = 'button';
+          const top = el('div', 'os-row-top');
+          top.append(
+            el('span', 'os-row-title', entry.title),
+            el('span', 'os-row-date', entry.date),
+          );
+          row.appendChild(top);
+          if (entry.summary) row.appendChild(el('p', 'os-row-sum', entry.summary));
+          row.addEventListener('click', () => renderEntry(entry));
+          list.appendChild(row);
+        }
+        bodyWrap.appendChild(list);
+        bodyWrap.scrollTop = 0;
+      };
+      const renderEntry = (entry: OSEntry) => {
+        bodyWrap.classList.remove('os-panel-collection');
+        renderReaderInto(bodyWrap, entry, getBody, { heroImage: entry.heroImage });
+        const back = el('button', 'st-panel-back');
+        back.type = 'button';
+        back.textContent = `← ${source.title}`;
+        back.addEventListener('click', renderList);
+        bodyWrap.prepend(back);
+        bodyWrap.scrollTop = 0;
+      };
+      renderList();
+    } else {
+      renderReaderInto(
+        bodyWrap,
+        {
+          title: source.title,
+          meta: source.meta,
+          date: source.date,
+          summary: source.summary,
+          bodyId: source.bodyId,
+        },
+        getBody,
+        { heroImage: source.heroImage },
+      );
+    }
 
     card.append(head, bodyWrap);
     backdrop.appendChild(card);
