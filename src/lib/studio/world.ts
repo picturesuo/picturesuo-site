@@ -13,8 +13,15 @@
  */
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
-import { buildRoom } from './room';
-import { createOS, type OSManifest, type OSHandle } from './os';
+import { buildRoom, type Hotspot } from './room';
+import {
+  createOS,
+  createReaderPanel,
+  type OSManifest,
+  type OSHandle,
+  type PanelHandle,
+  type PanelDocSource,
+} from './os';
 
 export interface BootOptions {
   root: HTMLElement;
@@ -23,7 +30,7 @@ export interface BootOptions {
   canWalk: boolean;
 }
 
-type State = 'intro' | 'walking' | 'toComputer' | 'computer' | 'toStand';
+type State = 'intro' | 'walking' | 'toComputer' | 'computer' | 'toStand' | 'panel';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
@@ -38,6 +45,8 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
   const hudEl = q<HTMLElement>('[data-hud]');
   const osEl = q<HTMLElement>('[data-os]');
   const osScreen = q<HTMLElement>('[data-os-screen]');
+  const panelEl = q<HTMLElement>('[data-panel]');
+  const useHintEl = q<HTMLElement>('[data-use-hint]');
   const store = q<HTMLElement>('[data-doc-store]');
   const getBody = (bodyId: string): string => {
     const node = store?.querySelector(`[data-body-id="${bodyId}"]`);
@@ -59,6 +68,11 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  // Filmic tone mapping + sRGB output give the room a cohesive, warm golden-hour
+  // look and keep the window highlights from blowing out to flat white.
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(62, 1, 0.05, 100);
@@ -121,7 +135,35 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
   const ACCEL = 12;
 
   const raycaster = new THREE.Raycaster();
-  let usable = false;
+  const CENTER = new THREE.Vector2(0, 0);
+
+  // Flatten every hotspot's meshes into one raycast list, remembering which
+  // hotspot each mesh belongs to.
+  const targetList: Array<{ mesh: THREE.Object3D; hs: Hotspot }> = [];
+  for (const hs of room.hotspots) for (const t of hs.targets) targetList.push({ mesh: t, hs });
+  const targetMeshes = targetList.map((t) => t.mesh);
+  let activeHotspot: Hotspot | null = null;
+
+  const setActiveHotspot = (hs: Hotspot | null) => {
+    if (hs === activeHotspot) return;
+    if (activeHotspot) activeHotspot.setHighlight(false);
+    activeHotspot = hs;
+    if (hs) {
+      hs.setHighlight(true);
+      useHintEl.textContent = '';
+      const label = document.createElement('span');
+      label.textContent = hs.label;
+      const sep = document.createTextNode(' · click or ');
+      const key = document.createElement('b');
+      key.textContent = 'E';
+      useHintEl.append(label, sep, key);
+    }
+    hudEl.classList.toggle('can-use', !!hs);
+  };
+
+  const pulseHotspots = (time: number) => {
+    for (const hs of room.hotspots) hs.pulse(time);
+  };
 
   function updateWalk(dt: number) {
     const inF = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
@@ -171,14 +213,16 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
     p.y = EYE + (speed > 0.15 ? Math.sin(bob) * 0.035 : 0);
   }
 
-  function checkUsable() {
-    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-    const hits = raycaster.intersectObjects(room.useTargets, false);
-    const near = hits.length > 0 && hits[0].distance < 3.0;
-    if (near !== usable) {
-      usable = near;
-      hudEl.classList.toggle('can-use', usable);
+  function checkHotspot() {
+    raycaster.setFromCamera(CENTER, camera);
+    const hits = raycaster.intersectObjects(targetMeshes, false);
+    let found: Hotspot | null = null;
+    if (hits.length) {
+      const hit = hits[0];
+      const entry = targetList.find((t) => t.mesh === hit.object);
+      if (entry && hit.distance < entry.hs.reach) found = entry.hs;
     }
+    setActiveHotspot(found);
   }
 
   // --- Camera easing ----------------------------------------------------------
@@ -231,7 +275,16 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
   // --- State machine ----------------------------------------------------------
   let state: State = 'intro';
   let os: OSHandle | null = null;
+  let panel: PanelHandle | null = null;
   let intentionalUnlock = false;
+
+  const clearActiveHotspot = () => {
+    if (activeHotspot) {
+      activeHotspot.setHighlight(false);
+      activeHotspot = null;
+    }
+    hudEl.classList.remove('can-use');
+  };
 
   function showEnter() {
     enterEl.hidden = false;
@@ -242,9 +295,10 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
   }
 
   function enterComputer() {
-    if (state === 'toComputer' || state === 'computer') return;
+    if (state === 'toComputer' || state === 'computer' || state === 'panel') return;
     state = 'toComputer';
     controls.enabled = false;
+    clearActiveHotspot();
     hideEnter();
     hudEl.hidden = true;
     room.setScreenGlow(true);
@@ -277,6 +331,56 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
       showEnter();
       controls.enabled = true;
     });
+  }
+
+  // --- Focused in-world reader panels (non-computer hotspots) -----------------
+  function openPanel(source: PanelDocSource) {
+    if (state === 'panel' || state === 'toComputer' || state === 'computer') return;
+    state = 'panel';
+    clearActiveHotspot();
+    hudEl.hidden = true;
+    // Free the pointer so the reader can be scrolled and dismissed.
+    if (controls.isLocked) {
+      intentionalUnlock = true;
+      controls.unlock();
+    }
+    if (!panel) panel = createReaderPanel({ layer: panelEl, getBody, onClose: onPanelClosed });
+    panel.open(source);
+  }
+
+  function closePanel() {
+    if (state !== 'panel' || !panel) return;
+    panel.close(); // fires onPanelClosed
+  }
+
+  // Called when the panel tears itself down (close button, backdrop, or Esc).
+  function onPanelClosed() {
+    state = 'intro';
+    showEnter();
+    // If this close came from a user gesture, re-lock straight back into
+    // walking; the 'lock' handler then hides the enter card. If the browser
+    // refuses, the enter card stays as the fallback way back in.
+    if (canWalk) {
+      // requestPointerLock() rejects asynchronously (an Esc-driven close carries
+      // no transient user activation, and there's a ~1.25s re-lock cooldown), so a
+      // try/catch around controls.lock() can never catch it — the rejection would
+      // surface as a console error. Call it directly and swallow the rejection;
+      // the enter card is already shown as the fallback way back into walking.
+      const el = controls.domElement as
+        | (HTMLElement & { requestPointerLock(opts?: unknown): unknown })
+        | null;
+      const req = el?.requestPointerLock?.({ unadjustedMovement: false });
+      if (req && typeof (req as { catch?: unknown }).catch === 'function') {
+        (req as Promise<unknown>).catch(() => {
+          /* refused: stay on the enter card */
+        });
+      }
+    }
+  }
+
+  function activateHotspot(hs: Hotspot) {
+    if (hs.action.type === 'computer') enterComputer();
+    else openPanel(hs.action.source);
   }
 
   function readPlainly() {
@@ -331,12 +435,16 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
   // --- Input listeners --------------------------------------------------------
   const onKeyDown = (e: KeyboardEvent) => {
     keys.add(e.code);
-    if (e.code === 'KeyE' && state === 'walking' && usable) {
+    if (e.code === 'KeyE' && state === 'walking' && activeHotspot) {
       e.preventDefault();
-      enterComputer();
+      activateHotspot(activeHotspot);
     }
     if (e.code === 'Escape' && state === 'computer' && !(os && os.isFullscreen())) {
       stepBack();
+    }
+    if (e.code === 'Escape' && state === 'panel') {
+      e.preventDefault();
+      closePanel();
     }
   };
   const onKeyUp = (e: KeyboardEvent) => keys.delete(e.code);
@@ -345,8 +453,8 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
   window.addEventListener('blur', () => keys.clear()); // a window blur can swallow the keyup
 
   canvas.addEventListener('click', () => {
-    if (state === 'walking' && usable) {
-      enterComputer();
+    if (state === 'walking' && activeHotspot) {
+      activateHotspot(activeHotspot);
     } else if (state === 'intro' && canWalk) {
       controls.lock();
     }
@@ -380,18 +488,22 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
   function tick(now: number) {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
+    const t = now * 0.001;
     if (ease) {
       updateEase(dt);
+      pulseHotspots(t);
       renderer.render(scene, camera);
     } else if (state === 'walking') {
       updateWalk(dt);
-      checkUsable();
+      checkHotspot();
+      pulseHotspots(t);
       renderer.render(scene, camera);
     } else if (state === 'intro') {
+      pulseHotspots(t);
       renderer.render(scene, camera);
     }
-    // In 'computer' idle we skip rendering: the scene is static and the OS is an
-    // HTML layer over the last frame, so nothing needs redrawing.
+    // In 'computer' / 'panel' idle we skip rendering: the scene is static and the
+    // reader is an HTML layer over the last frame, so nothing needs redrawing.
     raf = requestAnimationFrame(tick);
   }
   function start() {
@@ -417,6 +529,15 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
   renderer.render(scene, camera); // paint at least one frame even if rAF is throttled
   start();
 
+  // Image textures (framed art, the ceramics photo) load asynchronously. On a
+  // throttled/backgrounded tab rAF is paused, so re-paint a few times as they
+  // arrive to guarantee the first visible frame is fully textured.
+  for (const ms of [150, 450, 1000, 1800]) {
+    window.setTimeout(() => {
+      if (state !== 'computer' && state !== 'panel') renderer.render(scene, camera);
+    }, ms);
+  }
+
   // --- Teardown (not normally called; kept for completeness / HMR safety) -----
   return function destroyStudio() {
     stop();
@@ -424,6 +545,7 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
     window.removeEventListener('keyup', onKeyUp);
     window.removeEventListener('resize', resize);
     if (os) os.destroy();
+    if (panel) panel.destroy();
     room.dispose();
     renderer.dispose();
   };

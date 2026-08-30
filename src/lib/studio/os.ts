@@ -49,6 +49,30 @@ export interface OSHandle {
   isFullscreen: () => boolean;
 }
 
+/**
+ * A single focused document, shown either in the seated desktop's reader window
+ * or in a standalone in-world panel (see createReaderPanel). Content is always
+ * sourced from the inline, encrypted store via getBody(bodyId) — never fetched.
+ */
+export interface PanelDocSource {
+  kind: 'doc';
+  title: string;
+  meta?: string;
+  date?: string;
+  summary?: string;
+  bodyId: string;
+  accent: string;
+  /** Optional local image rendered at the top of the reader (e.g. a ceramic photo). */
+  heroImage?: { src: string; alt?: string };
+}
+
+export interface PanelHandle {
+  open: (source: PanelDocSource) => void;
+  close: () => void;
+  isOpen: () => boolean;
+  destroy: () => void;
+}
+
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
@@ -58,6 +82,39 @@ function el<K extends keyof HTMLElementTagNameMap>(
   if (className) node.className = className;
   if (text != null) node.textContent = text;
   return node;
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+/**
+ * Fill an element with a reader: a header (kicker / title / lede / date) and the
+ * entry's pre-rendered prose pulled from the inline store. Shared by the seated
+ * desktop reader window and the standalone in-world panel so both look identical.
+ */
+function renderReaderInto(
+  body: HTMLElement,
+  entry: { title: string; meta?: string; date?: string; summary?: string; bodyId: string },
+  getBody: (bodyId: string) => string,
+  opts: { heroImage?: { src: string; alt?: string } } = {},
+): void {
+  body.textContent = '';
+  body.classList.add('os-reader');
+  const head = el('header', 'os-reader-head');
+  if (entry.meta) head.appendChild(el('p', 'os-reader-kicker', entry.meta));
+  head.appendChild(el('h1', undefined, entry.title));
+  if (entry.summary) head.appendChild(el('p', 'os-reader-lede', entry.summary));
+  if (entry.date) head.appendChild(el('p', 'os-reader-date', entry.date));
+  const article = el('div', 'os-prose');
+  const heroHTML = opts.heroImage
+    ? `<figure class="os-hero-fig"><img src="${escapeAttr(opts.heroImage.src)}" alt="${escapeAttr(
+        opts.heroImage.alt ?? '',
+      )}" loading="lazy" /></figure>`
+    : '';
+  article.innerHTML = heroHTML + getBody(entry.bodyId);
+  body.append(head, article);
+  body.scrollTop = 0;
 }
 
 export function createOS(opts: OSOptions): OSHandle {
@@ -186,17 +243,7 @@ export function createOS(opts: OSOptions): OSHandle {
 
   const openReader = (entry: OSEntry, accent: string) => {
     const body = openWindow(`reader:${entry.bodyId}`, entry.title, accent);
-    body.textContent = '';
-    body.classList.add('os-reader');
-    const head = el('header', 'os-reader-head');
-    if (entry.meta) head.appendChild(el('p', 'os-reader-kicker', entry.meta));
-    head.appendChild(el('h1', undefined, entry.title));
-    if (entry.summary) head.appendChild(el('p', 'os-reader-lede', entry.summary));
-    if (entry.date) head.appendChild(el('p', 'os-reader-date', entry.date));
-    const article = el('div', 'os-prose');
-    article.innerHTML = getBody(entry.bodyId);
-    body.append(head, article);
-    body.scrollTop = 0;
+    renderReaderInto(body, entry, getBody);
   };
 
   const openCollection = (app: OSApp) => {
@@ -284,5 +331,81 @@ export function createOS(opts: OSOptions): OSHandle {
     },
     destroy,
     isFullscreen: () => document.fullscreenElement === fsTarget,
+  };
+}
+
+/**
+ * A standalone, focused reader panel for the in-world hotspots (a framed page, a
+ * pot, a book, the corkboard, the wall calendar). It floats as a centred sheet
+ * over the walking view — no "sitting" required — and reuses the exact reader /
+ * prose styling of the seated desktop so everything reads as one interface.
+ * Like the desktop, it only ever shows content already inlined in the page.
+ */
+export function createReaderPanel(opts: {
+  layer: HTMLElement;
+  getBody: (bodyId: string) => string;
+  onClose: () => void;
+}): PanelHandle {
+  const { layer, getBody, onClose } = opts;
+  let isOpen = false;
+
+  const close = () => {
+    if (!isOpen) return;
+    isOpen = false;
+    layer.textContent = '';
+    layer.hidden = true;
+    onClose();
+  };
+
+  const open = (source: PanelDocSource) => {
+    layer.textContent = '';
+
+    const backdrop = el('div', 'st-panel-backdrop');
+    const card = el('div', 'st-panel-card');
+    card.style.setProperty('--accent', source.accent || 'var(--blue)');
+
+    const head = el('div', 'st-panel-head');
+    head.append(el('span', 'st-panel-eyebrow', "Ben’s Studio"));
+    const closeBtn = el('button', 'st-panel-close');
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'Close ✕';
+    closeBtn.addEventListener('click', close);
+    head.append(closeBtn);
+
+    const bodyWrap = el('div', 'st-panel-body');
+    renderReaderInto(
+      bodyWrap,
+      {
+        title: source.title,
+        meta: source.meta,
+        date: source.date,
+        summary: source.summary,
+        bodyId: source.bodyId,
+      },
+      getBody,
+      { heroImage: source.heroImage },
+    );
+
+    card.append(head, bodyWrap);
+    backdrop.appendChild(card);
+    // Click the dimmed area (not the card) to dismiss.
+    backdrop.addEventListener('pointerdown', (e) => {
+      if (e.target === backdrop) close();
+    });
+    layer.appendChild(backdrop);
+    layer.hidden = false;
+    isOpen = true;
+    bodyWrap.scrollTop = 0;
+  };
+
+  return {
+    open,
+    close,
+    isOpen: () => isOpen,
+    destroy: () => {
+      layer.textContent = '';
+      layer.hidden = true;
+      isOpen = false;
+    },
   };
 }

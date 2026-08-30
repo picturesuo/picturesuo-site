@@ -146,8 +146,9 @@ const exploreLinks = [
         <p class="st-kicker">Picturesuo</p>
         <h2>Step into the studio</h2>
         <p class="st-enter-lede">
-          A sunlit room of writing, code, and clay. Walk to the desk and sit at the computer to read
-          everything in-world.
+          A sunlit room of writing, code, and clay. Walk around and look at the framed pages, the
+          shelves, the corkboard, and the desk — each opens something to read. Or sit at the computer
+          for everything at once.
         </p>
         <div class="st-enter-actions">
           <button class="st-btn primary st-walk-only" type="button" data-action="walk">
@@ -156,8 +157,8 @@ const exploreLinks = [
           <button class="st-btn" type="button" data-action="sit">Sit at the desk →</button>
         </div>
         <p class="st-enter-controls st-walk-only">
-          Mouse to look · <b>W A S D</b> to move · <b>E</b> to use the computer · <b>Esc</b> to step
-          back
+          Mouse to look · <b>W A S D</b> to move · <b>E</b> or click to use what you’re looking at ·
+          <b>Esc</b> to step back
         </p>
         <button class="st-plainly" type="button" data-action="plainly">Read plainly instead →</button>
       </div>
@@ -174,6 +175,9 @@ const exploreLinks = [
     <div class="os" data-os hidden>
       <div class="os-screen" data-os-screen></div>
     </div>
+
+    <!-- Focused in-world reader panel, opened by looking at art / books / notes. -->
+    <div class="st-panel" data-panel hidden></div>
   </div>
 
   <!-- HIDDEN CONTENT STORE — server-rendered full HTML, inline so staticrypt encrypts it. -->
@@ -529,11 +533,12 @@ const exploreLinks = [
     top: calc(50% + 26px);
     transform: translateX(-50%);
     padding: 8px 14px;
-    background: rgba(23, 23, 20, 0.78);
+    background: rgba(23, 23, 20, 0.82);
     color: #f3f0e8;
     border-radius: 999px;
     font-size: 0.9rem;
-    white-space: nowrap;
+    max-width: min(74vw, 540px);
+    text-align: center;
     opacity: 0;
     transition: opacity 0.18s ease;
   }
@@ -575,6 +580,26 @@ const exploreLinks = [
     width: 100% !important;
     height: 100% !important;
     border-radius: 0 !important;
+  }
+  /* Projected on the in-world monitor: sink the desktop into the bezel with a
+     dark surround, a warm screen glow, and a faint glass sheen so it reads as a
+     real screen rather than a floating panel. Fullscreen drops all of it. */
+  .os:not(.is-fullscreen) {
+    border-radius: 6px;
+    box-shadow:
+      0 0 0 2px rgba(9, 8, 7, 0.92),
+      0 0 0 3px rgba(60, 52, 40, 0.6),
+      0 0 26px 7px rgba(255, 213, 150, 0.3),
+      inset 0 0 46px rgba(8, 10, 18, 0.28);
+  }
+  .os:not(.is-fullscreen)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(122deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 44%);
   }
   .os-screen {
     position: absolute;
@@ -894,6 +919,125 @@ const exploreLinks = [
   /* The embedded activity calendar, shrunk to fit the reader. */
   .os-prose .cal {
     margin: 1em 0;
+  }
+
+  /* --- Focused in-world reader panel (hotspots) ---------------------------- */
+  .st-panel {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+  .st-panel[hidden] {
+    display: none;
+  }
+  .st-panel-backdrop {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: clamp(14px, 4vw, 48px);
+    background: radial-gradient(circle at 50% 32%, rgba(23, 23, 20, 0.42), rgba(23, 23, 20, 0.68));
+    backdrop-filter: blur(3px);
+    animation: st-panel-in 0.2s ease;
+  }
+  @keyframes st-panel-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .st-panel-card {
+    position: relative;
+    width: min(760px, 100%);
+    max-height: min(87vh, 940px);
+    display: flex;
+    flex-direction: column;
+    background: #fbf8f1;
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--accent, var(--blue));
+    border-radius: 12px;
+    box-shadow: 0 40px 100px -40px rgba(23, 23, 20, 0.92);
+    overflow: hidden;
+    container-type: inline-size;
+    animation: st-card-in 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @keyframes st-card-in {
+    from {
+      transform: translateY(16px) scale(0.98);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+  .st-panel-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.72);
+  }
+  .st-panel-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--blue-dark);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .st-panel-eyebrow::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent, var(--coral));
+  }
+  .st-panel-close {
+    flex: none;
+    padding: 7px 14px;
+    border: 1px solid var(--ink);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 750;
+    cursor: pointer;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
+  }
+  .st-panel-close:hover {
+    background: var(--ink);
+    color: #fff;
+  }
+  .st-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: clamp(20px, 4cqw, 40px);
+    font-size: clamp(15px, 2.1cqw, 18px);
+    color: var(--ink);
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Ceramic/photo hero image at the top of an art reader panel. */
+  .os-hero-fig {
+    margin: 0 0 1.3em;
+  }
+  .os-hero-fig img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 0.5em;
+    box-shadow: 0 20px 44px -30px rgba(23, 23, 20, 0.7);
   }
 
   /* Floating re-enter button (plain mode) */
