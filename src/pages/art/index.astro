@@ -16,7 +16,7 @@ const pieces = newestFirst(await getCollection('art', ({ data }) => !data.draft)
     <div class="artifact-strip">
       {
         pieces.map((piece) => (
-          <a class="art-card" href={`/art/${piece.id}`}>
+          <a class="art-card" href={`/art/${piece.id}`} data-reveal>
             <>
               <img src={piece.data.image} alt={piece.data.imageAlt} />
               <footer>

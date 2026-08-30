@@ -9,7 +9,7 @@ interface Props {
 const { entry, eyebrow } = Astro.props;
 ---
 
-<article class="entry-card">
+<article class="entry-card" data-reveal>
   <div class="entry-meta">
     <span>{eyebrow ?? entry.collection}</span>
     <time datetime={entry.data.publishedAt.toISOString()}>{formatDate(entry.data.publishedAt)}</time

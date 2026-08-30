@@ -92,7 +92,23 @@ input {
   text-decoration: none;
 }
 .wordmark span {
+  display: inline-block;
   color: var(--blue);
+}
+.wordmark:hover span {
+  animation: dot-bob 0.6s ease;
+}
+@keyframes dot-bob {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  35% {
+    transform: translateY(-4px) scale(1.28);
+  }
+  70% {
+    transform: translateY(0) scale(1);
+  }
 }
 nav {
   display: flex;
@@ -100,15 +116,45 @@ nav {
   gap: 18px;
 }
 nav a {
+  position: relative;
   color: var(--muted);
   text-decoration: none;
   font-size: 0.76rem;
   font-weight: 750;
   text-transform: uppercase;
   letter-spacing: 0.085em;
+  transition: color 0.2s ease;
+}
+nav a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 2px;
+  background: var(--blue);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.28s ease;
 }
 nav a:hover {
   color: var(--blue-dark);
+}
+nav a:hover::after,
+nav a:focus-visible::after {
+  transform: scaleX(1);
+}
+nav a[aria-current='page'] {
+  color: var(--ink);
+}
+nav a[aria-current='page']::after {
+  transform: scaleX(1);
+  background: var(--ink);
+}
+nav a:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 
 .page-shell {
@@ -157,18 +203,50 @@ h3 {
 }
 
 .hero {
+  position: relative;
   min-height: 72vh;
   display: grid;
-  grid-template-columns: minmax(170px, 0.45fr) minmax(0, 1.55fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
   align-items: center;
-  gap: clamp(30px, 8vw, 120px);
+  gap: clamp(30px, 6vw, 92px);
+}
+.hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(20px, 3vw, 30px);
+  min-width: 0;
 }
 .hero-aside {
-  align-self: start;
-  margin-top: 18px;
-  max-width: 230px;
+  max-width: 340px;
   color: var(--muted);
   font-size: 0.88rem;
+}
+.hero-aside p:last-child {
+  margin: 6px 0 0;
+}
+.hero h1 {
+  font-size: clamp(3rem, 6.4vw, 6.1rem);
+}
+.hero-visual {
+  min-width: 0;
+}
+/* Soft accent spotlight that tracks the pointer inside the hero only. */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: -12% -8%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    300px circle at var(--hx, 72%) var(--hy, 38%),
+    rgba(11, 135, 183, 0.1),
+    transparent 62%
+  );
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.hero.spot-on::before {
+  opacity: 1;
 }
 .hero-actions {
   display: flex;
@@ -188,13 +266,28 @@ h3 {
   font-size: 0.8rem;
   font-weight: 750;
   letter-spacing: 0.04em;
+  background: transparent;
+  transition:
+    transform 0.2s ease,
+    background-color 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 .button.primary {
   color: white;
   background: var(--ink);
 }
 .button:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px -16px rgba(23, 23, 20, 0.6);
+}
+.button:not(.primary):hover {
+  background: var(--ink);
+  color: white;
+}
+.button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(11, 135, 183, 0.45);
 }
 
 .section {
@@ -601,5 +694,55 @@ h3 {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Interaction layer: scroll reveal + tasteful hovers.
+   The hidden state is gated on `.js` (set before first paint) so no-JS
+   visitors never lose content. Component transitions are declared *after* the
+   reveal base so they win at equal specificity and keep their own hover feel.
+--------------------------------------------------------------------------- */
+[data-reveal] {
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+}
+.js [data-reveal]:not(.is-visible) {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.entry-card {
+  transition:
+    transform 0.32s ease,
+    border-color 0.32s ease,
+    box-shadow 0.32s ease,
+    opacity 0.55s ease;
+}
+.entry-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--blue);
+  box-shadow: 0 20px 44px -30px rgba(11, 135, 183, 0.55);
+}
+
+.project-row {
+  padding-inline: 12px;
+  margin-inline: -12px;
+  transition:
+    transform 0.3s ease,
+    background-color 0.3s ease,
+    opacity 0.6s ease;
+}
+.project-row:hover {
+  transform: translateX(6px);
+  background: rgba(11, 135, 183, 0.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Never let the reveal trick hide anything for reduced-motion visitors. */
+  .js [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
   }
 }

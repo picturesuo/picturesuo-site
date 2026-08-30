@@ -15,12 +15,29 @@ const {
 } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const pageTitle = title === 'Picturesuo' ? title : `${title} — Picturesuo`;
+
+const path = Astro.url.pathname;
+const navItems = [
+  { href: '/writing', label: 'Writing' },
+  { href: '/projects', label: 'Projects' },
+  { href: '/art', label: 'Art' },
+  { href: '/now', label: 'Now' },
+  { href: '/progress', label: 'Progress' },
+  { href: '/archive', label: 'Archive' },
+];
+const isActive = (href: string) => path === href || path.startsWith(`${href}/`);
 ---
 
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <script is:inline>
+      // Mark that JS is live *before* first paint, so the scroll-reveal styles
+      // (which hide [data-reveal]) only ever apply when JS can un-hide them.
+      // No-JS visitors keep the class off and see every element immediately.
+      document.documentElement.classList.add('js');
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <meta name="theme-color" content="#f3f0e8" />
@@ -46,12 +63,13 @@ const pageTitle = title === 'Picturesuo' ? title : `${title} — Picturesuo`;
     <header class="site-header">
       <a class="wordmark" href="/" aria-label="Picturesuo home">Picturesuo<span>.</span></a>
       <nav aria-label="Primary navigation">
-        <a href="/writing">Writing</a>
-        <a href="/projects">Projects</a>
-        <a href="/art">Art</a>
-        <a href="/now">Now</a>
-        <a href="/progress">Progress</a>
-        <a href="/archive">Archive</a>
+        {
+          navItems.map((item) => (
+            <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
+              {item.label}
+            </a>
+          ))
+        }
       </nav>
     </header>
     <main id="main"><slot /></main>
@@ -67,5 +85,39 @@ const pageTitle = title === 'Picturesuo' ? title : `${title} — Picturesuo`;
         <a href="/about">About</a>
       </div>
     </footer>
+    <script>
+      // Scroll reveal: fade + rise [data-reveal] elements as they enter view.
+      // Guarded so nothing can stay hidden — reduced motion or a missing
+      // IntersectionObserver reveals everything at once.
+      const els = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'));
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const reveal = (el: Element) => el.classList.add('is-visible');
+
+      if (reduce || !('IntersectionObserver' in window) || els.length === 0) {
+        els.forEach(reveal); // never leave content hidden
+      } else {
+        // Reveal whatever is already on screen right now, so nothing depends on
+        // the observer's first callback timing; observe the rest for scroll-in.
+        const inView = (el: HTMLElement) => {
+          const r = el.getBoundingClientRect();
+          return r.top < window.innerHeight && r.bottom > 0;
+        };
+        const io = new IntersectionObserver(
+          (entries, obs) => {
+            for (const e of entries) {
+              if (e.isIntersecting) {
+                reveal(e.target);
+                obs.unobserve(e.target);
+              }
+            }
+          },
+          { rootMargin: '0px 0px -8% 0px', threshold: 0.06 },
+        );
+        els.forEach((el) => {
+          if (inView(el)) reveal(el);
+          else io.observe(el);
+        });
+      }
+    </script>
   </body>
 </html>

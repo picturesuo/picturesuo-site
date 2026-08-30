@@ -16,10 +16,12 @@
   "dependencies": {
     "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.7.3",
-    "astro": "^7.2.4"
+    "astro": "^7.2.4",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.6",
+    "@types/three": "^0.185.4",
     "prettier": "^3.6.2",
     "prettier-plugin-astro": "^0.14.1",
     "staticrypt": "^3.5.4",

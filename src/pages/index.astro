@@ -1,5 +1,6 @@
 ---
 import { getCollection } from 'astro:content';
+import ClayHero from '../components/ClayHero.astro';
 import EntryCard from '../components/EntryCard.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
 import { newestFirst } from '../lib/content';
@@ -18,26 +19,31 @@ const art = newestFirst(await getCollection('art', ({ data }) => !data.draft)).s
 >
   <div class="page-shell">
     <section class="hero">
-      <aside class="hero-aside">
-        <p class="page-kicker">A public record</p>
-        <p>Writing, technical work, objects, and field notes. Kept slowly enough to last.</p>
-      </aside>
-      <div>
-        <p class="page-kicker">Picturesuo</p>
-        <h1>Things made,<br />learned &amp;<br />noticed.</h1>
-        <p class="lede">
-          I’m building in public across technology, writing, and ceramics—following the work
-          wherever it becomes interesting.
-        </p>
-        <div class="hero-actions">
-          <a class="button primary" href="/writing">Read the writing</a>
-          <a class="button" href="/now">What I’m doing now</a>
+      <div class="hero-copy">
+        <aside class="hero-aside">
+          <p class="page-kicker">A public record</p>
+          <p>Writing, technical work, objects, and field notes. Kept slowly enough to last.</p>
+        </aside>
+        <div class="hero-lead">
+          <p class="page-kicker">Picturesuo</p>
+          <h1>Things made,<br />learned &amp;<br />noticed.</h1>
+          <p class="lede">
+            I’m building in public across technology, writing, and ceramics—following the work
+            wherever it becomes interesting.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="/writing">Read the writing</a>
+            <a class="button" href="/now">What I’m doing now</a>
+          </div>
         </div>
+      </div>
+      <div class="hero-visual">
+        <ClayHero />
       </div>
     </section>
 
     <section class="section rule">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <div class="section-label">Recent writing</div>
         <div class="section-intro">
           <h2>Notes become ideas.<br />Ideas become work.</h2><p class="muted">
@@ -59,14 +65,14 @@ const art = newestFirst(await getCollection('art', ({ data }) => !data.draft)).s
     </section>
 
     <section class="section rule">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <div class="section-label">Selected work</div>
         <div class="section-intro"><h2>Projects are arguments<br />made concrete.</h2></div>
       </div>
       <div class="project-list">
         {
           projects.map((project) => (
-            <a class="project-row" href={`/projects/${project.id}`}>
+            <a class="project-row" href={`/projects/${project.id}`} data-reveal>
               <span class="card-kicker">{project.data.status}</span>
               <h3>{project.data.title}</h3>
               <p>{project.data.summary}</p>
@@ -77,7 +83,7 @@ const art = newestFirst(await getCollection('art', ({ data }) => !data.draft)).s
     </section>
 
     <section class="section rule">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <div class="section-label">Objects</div>
         <div class="section-intro">
           <h2>Made by hand.</h2><p class="muted">
@@ -89,7 +95,7 @@ const art = newestFirst(await getCollection('art', ({ data }) => !data.draft)).s
       <div class="artifact-strip">
         {
           art.map((piece) => (
-            <a class="art-card" href={`/art/${piece.id}`}>
+            <a class="art-card" href={`/art/${piece.id}`} data-reveal>
               <img src={piece.data.image} alt={piece.data.imageAlt} loading="lazy" />
               <footer>
                 <>
@@ -105,7 +111,7 @@ const art = newestFirst(await getCollection('art', ({ data }) => !data.draft)).s
     </section>
 
     <section class="section rule">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <div class="section-label">Current portfolio</div>
         <div class="section-intro">
           <h2>Direction without rigidity.</h2><p class="lede">
@@ -114,13 +120,13 @@ const art = newestFirst(await getCollection('art', ({ data }) => !data.draft)).s
         </div>
       </div>
       <div class="split">
-        <div class="callout">
+        <div class="callout" data-reveal>
           <strong>Now</strong><p>
             Launching this archive, developing a sustainable public-writing practice, and
             documenting technical and physical work.
           </p><a href="/now">Read the current focus →</a>
         </div>
-        <div class="callout">
+        <div class="callout" data-reveal>
           <strong>Progress</strong><p>
             A small public record of shipped work and opportunity bets—not a performance dashboard.
           </p><a href="/progress">View the public log →</a>
@@ -129,6 +135,25 @@ const art = newestFirst(await getCollection('art', ({ data }) => !data.draft)).s
     </section>
   </div>
 </SiteLayout>
+
+<script>
+  // Subtle accent spotlight that tracks the pointer within the hero only.
+  // Mouse-like pointers with motion allowed; touch and reduced-motion opt out.
+  const hero = document.querySelector<HTMLElement>('.hero');
+  if (
+    hero &&
+    window.matchMedia('(pointer: fine)').matches &&
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) {
+    hero.addEventListener('pointermove', (e) => {
+      const r = hero.getBoundingClientRect();
+      hero.style.setProperty('--hx', `${(((e.clientX - r.left) / r.width) * 100).toFixed(1)}%`);
+      hero.style.setProperty('--hy', `${(((e.clientY - r.top) / r.height) * 100).toFixed(1)}%`);
+      hero.classList.add('spot-on');
+    });
+    hero.addEventListener('pointerleave', () => hero.classList.remove('spot-on'));
+  }
+</script>
 
 <style>
   .entry-card-wrap {

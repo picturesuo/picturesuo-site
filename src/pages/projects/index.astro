@@ -17,7 +17,7 @@ const projects = newestFirst(await getCollection('projects', ({ data }) => !data
     <div class="project-list">
       {
         projects.map((project) => (
-          <a class="project-row" href={`/projects/${project.id}`}>
+          <a class="project-row" href={`/projects/${project.id}`} data-reveal>
             <>
               <span class="card-kicker">{project.data.status}</span>
               <h3>{project.data.title}</h3>
