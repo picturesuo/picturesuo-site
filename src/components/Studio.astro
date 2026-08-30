@@ -1,0 +1,927 @@
+---
+/**
+ * Studio — the interactive 3D homepage.
+ *
+ * Static-first: the default DOM (`.st-plain`) is a warm, readable welcome that
+ * links into every reading route, so no-JS, no-WebGL, reduced-motion, and small
+ * phones get straight to the content. The walkable three.js studio boots *over*
+ * this only when the device can handle it and motion is allowed.
+ *
+ * Content plumbing (privacy constraint): staticrypt encrypts only HTML, so any
+ * separate content asset would leak past the password. Every entry's full HTML
+ * is therefore server-rendered inline into a hidden store here (→ encrypted),
+ * and a small inline JSON manifest tells the in-world desktop which body to show
+ * for each app. Nothing the OS displays is ever fetched from a separate file.
+ */
+import { getCollection, render } from 'astro:content';
+import { newestFirst, formatDate } from '../lib/content';
+import { currentCycle } from '../data/progress';
+import ActivityCalendar from './ActivityCalendar.astro';
+
+const writing = newestFirst(await getCollection('writing', ({ data }) => !data.draft));
+const projects = newestFirst(await getCollection('projects', ({ data }) => !data.draft));
+const art = newestFirst(await getCollection('art', ({ data }) => !data.draft));
+
+// Render every entry's full HTML now, so it can be inlined (and thus encrypted)
+// into the page. Keep the collections separate so each keeps its concrete type.
+const writingDocs = await Promise.all(
+  writing.map(async (entry) => {
+    const { Content } = await render(entry);
+    return { entry, Content, bodyId: `writing-${entry.id}` };
+  }),
+);
+const projectDocs = await Promise.all(
+  projects.map(async (entry) => {
+    const { Content } = await render(entry);
+    return { entry, Content, bodyId: `projects-${entry.id}` };
+  }),
+);
+const artDocs = await Promise.all(
+  art.map(async (entry) => {
+    const { Content } = await render(entry);
+    return { entry, Content, bodyId: `art-${entry.id}` };
+  }),
+);
+
+const manifest = {
+  apps: [
+    {
+      key: 'writing',
+      label: 'Writing',
+      kind: 'collection',
+      icon: '✒️',
+      accent: 'var(--green)',
+      empty: 'No writing published yet.',
+      entries: writingDocs.map((d) => ({
+        title: d.entry.data.title,
+        date: formatDate(d.entry.data.publishedAt),
+        meta: d.entry.data.kind ?? 'writing',
+        summary: d.entry.data.summary,
+        bodyId: d.bodyId,
+      })),
+    },
+    {
+      key: 'projects',
+      label: 'Projects',
+      kind: 'collection',
+      icon: '🛠️',
+      accent: 'var(--blue)',
+      empty: 'No projects published yet.',
+      entries: projectDocs.map((d) => ({
+        title: d.entry.data.title,
+        date: formatDate(d.entry.data.publishedAt),
+        meta: `${d.entry.data.status}${d.entry.data.language ? ' · ' + d.entry.data.language : ''}`,
+        summary: d.entry.data.summary,
+        bodyId: d.bodyId,
+      })),
+    },
+    {
+      key: 'art',
+      label: 'Art',
+      kind: 'collection',
+      icon: '🏺',
+      accent: 'var(--coral)',
+      empty: 'No pieces published yet.',
+      entries: artDocs.map((d) => ({
+        title: d.entry.data.title,
+        date: formatDate(d.entry.data.publishedAt),
+        meta: `${d.entry.data.year} · ${d.entry.data.medium}`,
+        summary: d.entry.data.summary,
+        bodyId: d.bodyId,
+      })),
+    },
+    { key: 'now', label: 'Now', kind: 'doc', icon: '☀️', accent: 'var(--amber)', bodyId: 'doc-now' },
+    { key: 'about', label: 'About', kind: 'doc', icon: '👤', accent: 'var(--plum)', bodyId: 'doc-about' },
+    { key: 'progress', label: 'Progress', kind: 'doc', icon: '📊', accent: 'var(--blue-dark)', bodyId: 'doc-progress' },
+  ],
+};
+
+// Serialize for an inline application/json block; neutralise any `</script>`.
+const manifestJson = JSON.stringify(manifest).replace(/</g, '\\u003c');
+
+const exploreLinks = [
+  { href: '/writing', label: 'Writing', blurb: 'Essays, notes, and field observations.' },
+  { href: '/projects', label: 'Projects', blurb: 'Software and technical experiments.' },
+  { href: '/art', label: 'Art', blurb: 'Ceramics and physical work.' },
+  { href: '/now', label: 'Now', blurb: 'What has my attention this season.' },
+  { href: '/progress', label: 'Progress', blurb: 'A public record, not a score.' },
+  { href: '/about', label: 'About', blurb: 'The through-line behind it all.' },
+];
+---
+
+<div class="studio" data-studio>
+  <!-- PLAIN READING MODE — the default page for everyone; the world boots over it. -->
+  <section class="st-plain page-shell" data-plain>
+    <div class="st-welcome">
+      <p class="page-kicker">Picturesuo</p>
+      <h1>Things made,<br />learned &amp;<br />noticed.</h1>
+      <p class="lede">
+        A public record across technology, writing, and ceramics. This home can be explored as a
+        walkable studio, or read plainly below.
+      </p>
+      <div class="hero-actions">
+        <a class="button primary" href="/writing">Read the writing</a>
+        <a class="button" href="/now">What I’m doing now</a>
+      </div>
+    </div>
+
+    <div class="st-explore">
+      {
+        exploreLinks.map((l) => (
+          <a class="st-explore-card" href={l.href}>
+            <span class="st-explore-label">{l.label}</span>
+            <span class="st-explore-blurb">{l.blurb}</span>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- WALKABLE STUDIO — hidden until JS decides the device can boot it. -->
+  <div class="st-world" data-world hidden>
+    <canvas class="st-canvas" data-canvas></canvas>
+
+    <div class="st-enter" data-enter>
+      <div class="st-enter-card">
+        <p class="st-kicker">Picturesuo</p>
+        <h2>Step into the studio</h2>
+        <p class="st-enter-lede">
+          A sunlit room of writing, code, and clay. Walk to the desk and sit at the computer to read
+          everything in-world.
+        </p>
+        <div class="st-enter-actions">
+          <button class="st-btn primary st-walk-only" type="button" data-action="walk">
+            Click to enter · walk with WASD
+          </button>
+          <button class="st-btn" type="button" data-action="sit">Sit at the desk →</button>
+        </div>
+        <p class="st-enter-controls st-walk-only">
+          Mouse to look · <b>W A S D</b> to move · <b>E</b> to use the computer · <b>Esc</b> to step
+          back
+        </p>
+        <button class="st-plainly" type="button" data-action="plainly">Read plainly instead →</button>
+      </div>
+    </div>
+
+    <div class="st-hud" data-hud hidden>
+      <div class="st-reticle"></div>
+      <div class="st-use-hint" data-use-hint>
+        Click or press <b>E</b> to use the computer
+      </div>
+      <div class="st-move-hint">WASD to move · mouse to look · Esc to step back</div>
+    </div>
+
+    <div class="os" data-os hidden>
+      <div class="os-screen" data-os-screen></div>
+    </div>
+  </div>
+
+  <!-- HIDDEN CONTENT STORE — server-rendered full HTML, inline so staticrypt encrypts it. -->
+  <div class="st-store" data-doc-store hidden aria-hidden="true">
+    {
+      [...writingDocs, ...projectDocs, ...artDocs].map((d) => {
+        const Body = d.Content;
+        return (
+          <div data-body-id={d.bodyId}>
+            <Body />
+          </div>
+        );
+      })
+    }
+
+    <div data-body-id="doc-now">
+      <h2>Building</h2>
+      <p>
+        I’m turning Picturesuo into a durable home for writing, technical projects, ceramics,
+        photographs, and the observations that connect them.
+      </p>
+      <h2>Learning</h2>
+      <p>
+        I’m learning how to publish consistently without letting publishing become the work—and how
+        to take intelligent opportunity risk while keeping strong personal constraints.
+      </p>
+      <h2>Making</h2>
+      <p>
+        I’m making software and physical objects, especially ceramics. Both are ways of turning an
+        idea into something another person can experience.
+      </p>
+      <h2>Constraints</h2>
+      <ul>
+        <li>No automatic publication from private notes or AI output.</li>
+        <li>No more than two active quarterly goals.</li>
+        <li>Ordinary website maintenance stays below 150 minutes per week.</li>
+      </ul>
+      <hr />
+      <p class="muted">
+        Next review: September 30, 2026. This page is a priority filter, not a complete life update.
+      </p>
+    </div>
+
+    <div data-body-id="doc-about">
+      <p>
+        Picturesuo is a public record of things I make, learn, and notice across technology,
+        writing, art, and travel.
+      </p>
+      <p>
+        The subjects may change. The method is consistent: do the work, keep good notes, publish the
+        parts that could help or interest another person, and preserve enough context to understand
+        the path later.
+      </p>
+      <p>
+        This site is intentionally independent from any social platform. Short versions of ideas may
+        appear on <a href="https://x.com/picturesuo">X</a>; the durable versions live here.
+      </p>
+      <h2>About the site</h2>
+      <p>
+        Built from portable text and image files, versioned with Git, and published as a static
+        site. It uses no advertising or behavioral tracking.
+      </p>
+    </div>
+
+    <div data-body-id="doc-progress">
+      <p class="page-kicker">Public progress · {currentCycle.label}</p>
+      <h2>A record, not a score.</h2>
+      <p class="lede">
+        Selected goals and meaningful changes. The complete daily log stays private.
+      </p>
+      <h3>Active goals</h3>
+      <ul>
+        {currentCycle.goals.map((goal) => <li>{goal}</li>)}
+      </ul>
+      <h3>Constraints / anti-goals</h3>
+      <ul>
+        {currentCycle.constraints.map((constraint) => <li>{constraint}</li>)}
+      </ul>
+      <h3>The calendar</h3>
+      <ActivityCalendar start="2026-09-01" weeks={30} />
+    </div>
+  </div>
+
+  <script is:inline type="application/json" data-os-manifest set:html={manifestJson}></script>
+</div>
+
+<script>
+  import type { OSManifest } from '../lib/studio/os';
+
+  function hasWebGL(): boolean {
+    try {
+      const c = document.createElement('canvas');
+      return !!(
+        window.WebGLRenderingContext &&
+        (c.getContext('webgl') || c.getContext('experimental-webgl'))
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  const root = document.querySelector<HTMLElement>('[data-studio]');
+  if (root) {
+    const plain = root.querySelector<HTMLElement>('[data-plain]');
+    const manifestEl = root.querySelector<HTMLElement>('[data-os-manifest]');
+    let manifest: OSManifest = { apps: [] };
+    try {
+      manifest = JSON.parse(manifestEl?.textContent || '{"apps":[]}');
+    } catch {
+      /* keep empty manifest — world still boots, desktop just has no apps */
+    }
+
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const fine = window.matchMedia('(pointer: fine)').matches;
+    const bigEnough = window.innerWidth >= 760 && window.innerHeight >= 480;
+    const pointerLockOk = 'requestPointerLock' in Element.prototype;
+    const canWalk = fine && pointerLockOk;
+
+    if (!reduce && bigEnough && hasWebGL()) {
+      import('../lib/studio/world')
+        .then((m) => m.bootStudio({ root, plain, manifest, canWalk }))
+        .catch((err) => {
+          // Anything goes wrong booting the world: the plain page is already the
+          // page, so the visitor simply keeps reading.
+          console.error('[studio] boot failed, staying on plain page', err);
+        });
+    }
+  }
+</script>
+
+<style is:global>
+  /* ==========================================================================
+     STUDIO — namespaced under .studio so these rules never leak. Loaded on the
+     home page only. Dynamically-created OS elements need global (unscoped)
+     rules, hence is:global with a hard .studio / .st- / .os prefix.
+     ========================================================================== */
+
+  /* --- Plain reading mode (default) --------------------------------------- */
+  .st-plain {
+    display: block;
+  }
+  .st-welcome {
+    max-width: 820px;
+    margin-bottom: clamp(40px, 6vw, 72px);
+  }
+  .st-welcome h1 {
+    font-size: clamp(3rem, 8vw, 6.4rem);
+  }
+  .st-explore {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .st-explore-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255, 254, 250, 0.8);
+    text-decoration: none;
+    transition:
+      transform 0.28s ease,
+      border-color 0.28s ease,
+      box-shadow 0.28s ease;
+  }
+  .st-explore-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--blue);
+    box-shadow: 0 20px 44px -30px rgba(11, 135, 183, 0.55);
+  }
+  .st-explore-label {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.4rem;
+  }
+  .st-explore-blurb {
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+  @media (max-width: 850px) {
+    .st-explore {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 560px) {
+    .st-explore {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* --- World overlay ------------------------------------------------------- */
+  .st-world {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: #efe7d7;
+    overflow: hidden;
+  }
+  .st-world[hidden] {
+    display: none;
+  }
+  .st-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: default;
+  }
+  .studio.is-world.can-walk .st-canvas {
+    cursor: crosshair;
+  }
+
+  /* Enter overlay */
+  .st-enter {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: radial-gradient(circle at 50% 40%, rgba(23, 23, 20, 0.25), rgba(23, 23, 20, 0.55));
+    backdrop-filter: blur(2px);
+    z-index: 3;
+  }
+  .st-enter[hidden] {
+    display: none;
+  }
+  .st-enter-card {
+    width: min(560px, 100%);
+    padding: clamp(24px, 4vw, 40px);
+    background: rgba(243, 240, 232, 0.97);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 40px 90px -50px rgba(23, 23, 20, 0.9);
+    text-align: left;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+  .st-kicker {
+    color: var(--blue-dark);
+    font-size: 0.73rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin: 0 0 6px;
+  }
+  .st-enter-card h2 {
+    font-size: clamp(2rem, 4vw, 2.8rem);
+    line-height: 1.02;
+    margin: 0 0 12px;
+  }
+  .st-enter-lede {
+    color: #3f3e39;
+    font-size: 1.05rem;
+    margin: 0 0 22px;
+  }
+  .st-enter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .st-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    padding: 0 20px;
+    border: 1px solid var(--ink);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 0.86rem;
+    font-weight: 750;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition:
+      transform 0.2s ease,
+      background-color 0.25s ease,
+      color 0.25s ease;
+  }
+  .st-btn.primary {
+    background: var(--ink);
+    color: #fff;
+  }
+  .st-btn:hover {
+    transform: translateY(-2px);
+  }
+  .st-btn:not(.primary):hover {
+    background: var(--ink);
+    color: #fff;
+  }
+  .st-enter-controls {
+    margin: 20px 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .st-enter-controls b {
+    color: var(--ink);
+  }
+  .st-plainly {
+    margin-top: 18px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--blue-dark);
+    font-family: inherit;
+    font-size: 0.9rem;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    cursor: pointer;
+  }
+  /* Touch / no-pointer-lock devices: hide the walking affordances. */
+  .studio:not(.can-walk) .st-walk-only {
+    display: none;
+  }
+
+  /* HUD (walking) */
+  .st-hud {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+  .st-hud[hidden] {
+    display: none;
+  }
+  .st-reticle {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    transform: translate(-50%, -50%);
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(23, 23, 20, 0.35);
+    transition:
+      width 0.15s ease,
+      height 0.15s ease,
+      background-color 0.15s ease;
+  }
+  .st-hud.can-use .st-reticle {
+    width: 16px;
+    height: 16px;
+    background: rgba(255, 244, 224, 0.5);
+    border-color: #fff;
+  }
+  .st-use-hint {
+    position: absolute;
+    left: 50%;
+    top: calc(50% + 26px);
+    transform: translateX(-50%);
+    padding: 8px 14px;
+    background: rgba(23, 23, 20, 0.78);
+    color: #f3f0e8;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+  }
+  .st-use-hint b {
+    color: #ffd8a0;
+  }
+  .st-hud.can-use .st-use-hint {
+    opacity: 1;
+  }
+  .st-move-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    padding: 7px 14px;
+    background: rgba(243, 240, 232, 0.82);
+    color: #3f3e39;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+  }
+
+  /* --- The in-world OS ----------------------------------------------------- */
+  .os {
+    position: absolute;
+    z-index: 4;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 0 0 1px rgba(23, 23, 20, 0.4);
+  }
+  .os[hidden] {
+    display: none;
+  }
+  .os.is-fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+  }
+  .os-screen {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    container-type: size;
+    font-family: Georgia, 'Times New Roman', serif;
+    /* Typography scales with the screen: small when projected on the monitor,
+       comfortable when the real display goes fullscreen. */
+    font-size: clamp(11px, 2.5cqw, 21px);
+    color: var(--ink);
+    background:
+      radial-gradient(120% 80% at 20% 0%, rgba(255, 236, 200, 0.9), transparent 60%),
+      linear-gradient(160deg, #f6f2ea, #e7ddca);
+  }
+  .os-desktop {
+    position: absolute;
+    inset: 0;
+    padding: 4cqmin 4cqmin 12cqmin;
+  }
+  .os-icons {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9em, 1fr));
+    gap: 2.2cqmin;
+    align-content: start;
+    max-width: 60em;
+  }
+  .os-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5em;
+    padding: 1.4em 0.6em;
+    border: 1px solid transparent;
+    border-radius: 0.9em;
+    background: rgba(255, 255, 255, 0.55);
+    box-shadow: 0 6px 18px -14px rgba(23, 23, 20, 0.7);
+    font-family: inherit;
+    color: var(--ink);
+    cursor: pointer;
+    transition:
+      transform 0.18s ease,
+      border-color 0.18s ease,
+      background-color 0.18s ease;
+  }
+  .os-icon:hover {
+    transform: translateY(-3px);
+    border-color: var(--accent, var(--blue));
+    background: #fff;
+  }
+  .os-icon-glyph {
+    font-size: 2.4em;
+    line-height: 1;
+    filter: drop-shadow(0 2px 3px rgba(23, 23, 20, 0.18));
+  }
+  .os-icon-label {
+    font-size: 0.86em;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+
+  .os-taskbar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 8cqmin;
+    min-height: 2.4em;
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0 1.4em;
+    background: rgba(23, 23, 20, 0.86);
+    color: #f3f0e8;
+    backdrop-filter: blur(6px);
+  }
+  .os-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    font-size: 0.9em;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .os-brand-dot {
+    width: 0.7em;
+    height: 0.7em;
+    border-radius: 50%;
+    background: var(--coral);
+  }
+  .os-spacer {
+    flex: 1;
+  }
+  .os-clock {
+    font-size: 0.82em;
+    color: #d8d4c8;
+    font-variant-numeric: tabular-nums;
+  }
+  .os-tb-btn {
+    padding: 0.45em 0.9em;
+    border: 1px solid rgba(243, 240, 232, 0.5);
+    border-radius: 999px;
+    background: transparent;
+    color: #f3f0e8;
+    font-family: inherit;
+    font-size: 0.8em;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  .os-tb-btn:hover {
+    background: rgba(243, 240, 232, 0.16);
+  }
+  .os-tb-back {
+    border-color: var(--coral);
+    color: #ffd8cd;
+  }
+
+  .os-windows {
+    position: absolute;
+    inset: 0 0 8cqmin 0;
+    pointer-events: none;
+  }
+  .os-win {
+    position: absolute;
+    width: 66%;
+    height: 74%;
+    min-width: 14em;
+    display: flex;
+    flex-direction: column;
+    background: #fbf8f1;
+    border: 1px solid var(--line);
+    border-radius: 0.7em;
+    box-shadow: 0 24px 60px -28px rgba(23, 23, 20, 0.7);
+    overflow: hidden;
+    pointer-events: auto;
+  }
+  .os-win.is-dragging {
+    user-select: none;
+  }
+  .os-win-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6em;
+    padding: 0.7em 1em;
+    border-bottom: 1px solid var(--line);
+    border-top: 3px solid var(--accent, var(--blue));
+    background: rgba(255, 255, 255, 0.7);
+    cursor: grab;
+    touch-action: none;
+  }
+  .os-win.is-dragging .os-win-header {
+    cursor: grabbing;
+  }
+  .os-win-title {
+    font-weight: 700;
+    font-size: 0.95em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .os-win-close {
+    flex: none;
+    width: 1.8em;
+    height: 1.8em;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(23, 23, 20, 0.08);
+    color: var(--ink);
+    font-size: 1.1em;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .os-win-close:hover {
+    background: var(--coral);
+    color: #fff;
+  }
+  .os-win-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.2em 1.4em;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Collection list */
+  .os-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+  }
+  .os-row {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.9em 1em;
+    border: 1px solid var(--line);
+    border-radius: 0.6em;
+    background: rgba(255, 255, 255, 0.6);
+    font-family: inherit;
+    color: var(--ink);
+    cursor: pointer;
+    transition:
+      transform 0.16s ease,
+      border-color 0.16s ease,
+      background-color 0.16s ease;
+  }
+  .os-row:hover {
+    transform: translateX(3px);
+    border-color: var(--accent, var(--blue));
+    background: #fff;
+  }
+  .os-row-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8em;
+    align-items: baseline;
+  }
+  .os-row-title {
+    font-size: 1.1em;
+    font-weight: 700;
+  }
+  .os-row-date {
+    flex: none;
+    color: var(--muted);
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .os-row-sum {
+    margin: 0.3em 0 0;
+    color: #4f4e48;
+    font-size: 0.9em;
+  }
+  .os-empty {
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* Reader */
+  .os-reader-head {
+    margin-bottom: 1.2em;
+    padding-bottom: 1em;
+    border-bottom: 1px solid var(--line);
+  }
+  .os-reader-kicker {
+    color: var(--blue-dark);
+    font-size: 0.72em;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0 0 0.3em;
+  }
+  .os-reader-head h1 {
+    font-size: clamp(1.4rem, 5.5cqw, 2.6rem);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    margin: 0 0 0.3em;
+  }
+  .os-reader-lede {
+    color: #3f3e39;
+    font-size: 1.1em;
+    margin: 0 0 0.4em;
+  }
+  .os-reader-date {
+    color: var(--muted);
+    font-size: 0.78em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0;
+  }
+  .os-prose {
+    font-size: 1em;
+    line-height: 1.62;
+    max-width: 42em;
+  }
+  .os-prose h2 {
+    font-size: 1.5em;
+    margin: 1.6em 0 0.5em;
+  }
+  .os-prose h3,
+  .os-prose h4 {
+    font-size: 1.2em;
+    margin: 1.4em 0 0.4em;
+  }
+  .os-prose p,
+  .os-prose ul,
+  .os-prose ol,
+  .os-prose blockquote {
+    margin: 0 0 1em;
+  }
+  .os-prose img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.4em;
+    margin: 1.2em 0;
+  }
+  .os-prose iframe {
+    max-width: 100%;
+    border-radius: 0.6em;
+    margin: 1em 0;
+  }
+  .os-prose blockquote {
+    border-left: 3px solid var(--blue);
+    padding-left: 0.8em;
+    color: #4f4e48;
+    font-style: italic;
+  }
+  .os-prose a {
+    color: var(--blue-dark);
+  }
+  .os-prose hr {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: 1.6em 0;
+  }
+  /* The embedded activity calendar, shrunk to fit the reader. */
+  .os-prose .cal {
+    margin: 1em 0;
+  }
+
+  /* Floating re-enter button (plain mode) */
+  .st-reenter {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 40;
+    padding: 12px 18px;
+    border: 1px solid var(--ink);
+    border-radius: 999px;
+    background: var(--ink);
+    color: #f3f0e8;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 0.85rem;
+    font-weight: 750;
+    cursor: pointer;
+    box-shadow: 0 16px 40px -22px rgba(23, 23, 20, 0.8);
+  }
+  .st-reenter[hidden] {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* Never boot the world under reduced motion; if the layer is somehow shown,
+       keep the plain page usable. */
+    .st-world {
+      display: none;
+    }
+  }
+</style>
