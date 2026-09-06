@@ -140,8 +140,9 @@ const exploreLinks = [
       <p class="page-kicker">Picturesuo</p>
       <h1>Things made,<br />learned &amp;<br />noticed.</h1>
       <p class="lede">
-        A public record across technology, writing, and ceramics. This home can be explored as a
-        walkable studio, or read plainly below.
+        A public record across technology, writing, and ceramics. The studio needs a larger
+        screen, a mouse, and WebGL — since this device has not got all three, here is
+        everything in plain text instead.
       </p>
       <div class="hero-actions">
         <a class="button primary" href="/writing">Read the writing</a>
@@ -170,9 +171,9 @@ const exploreLinks = [
         <p class="st-kicker">Picturesuo</p>
         <h2>Step into the studio</h2>
         <p class="st-enter-lede">
-          A sunlit room of writing, code, and clay. Walk around and look at the framed pages, the
-          shelves, the corkboard, and the desk — each opens something to read. Or sit at the
-          computer for everything at once.
+          A sunlit room of writing, code, and clay. The framed pages, the shelves, the corkboard
+          and the desk each open something to read. The computer on the desk holds all of it —
+          sit down and use it like any other machine.
         </p>
         <div class="st-enter-actions">
           <button class="st-btn primary st-walk-only" type="button" data-action="walk">
@@ -184,9 +185,6 @@ const exploreLinks = [
           Mouse to look · <b>W A S D</b> to move · <b>E</b> or click to use what you’re looking at ·
           <b>Esc</b> to step back
         </p>
-        <button class="st-plainly" type="button" data-action="plainly"
-          >Read plainly instead →</button
-        >
       </div>
     </div>
 
@@ -510,18 +508,6 @@ const exploreLinks = [
   }
   .st-enter-controls b {
     color: var(--ink);
-  }
-  .st-plainly {
-    margin-top: 18px;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--blue-dark);
-    font-family: inherit;
-    font-size: 0.9rem;
-    text-decoration: underline;
-    text-underline-offset: 0.2em;
-    cursor: pointer;
   }
   /* Touch / no-pointer-lock devices: hide the walking affordances. */
   .studio:not(.can-walk) .st-walk-only {

@@ -558,35 +558,6 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
     selectSlot(selectedSlot + (e.deltaY > 0 ? 1 : -1), false);
   };
 
-  function readPlainly() {
-    if (controls.isLocked) {
-      intentionalUnlock = true;
-      controls.unlock();
-    }
-    stop();
-    worldEl.hidden = true;
-    root.classList.remove('is-world');
-    if (plain) {
-      plain.removeAttribute('aria-hidden');
-      plain.removeAttribute('inert');
-    }
-    reenterBtn.hidden = false;
-  }
-
-  function reenterWorld() {
-    reenterBtn.hidden = true;
-    worldEl.hidden = false;
-    root.classList.add('is-world');
-    if (plain) {
-      plain.setAttribute('aria-hidden', 'true');
-      plain.setAttribute('inert', '');
-    }
-    state = 'intro';
-    showEnter();
-    resize();
-    start();
-  }
-
   // --- Controls events --------------------------------------------------------
   controls.addEventListener('lock', () => {
     state = 'walking';
@@ -659,17 +630,9 @@ export async function bootStudio(opts: BootOptions): Promise<() => void> {
     if (!action) return;
     if (action === 'walk') controls.lock();
     else if (action === 'sit') enterComputer();
-    else if (action === 'plainly') readPlainly();
   });
 
   // Floating "return to the studio" button used from plain mode.
-  const reenterBtn = document.createElement('button');
-  reenterBtn.type = 'button';
-  reenterBtn.className = 'st-reenter';
-  reenterBtn.textContent = 'Enter the studio ⤢';
-  reenterBtn.hidden = true;
-  reenterBtn.addEventListener('click', reenterWorld);
-  root.appendChild(reenterBtn);
 
   window.addEventListener('resize', resize);
 

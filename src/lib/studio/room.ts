@@ -360,8 +360,8 @@ export function buildRoom(scene: THREE.Scene): RoomHandles {
   // --- Monitor ---------------------------------------------------------------
   const monitor = new THREE.Group();
   const metal = mat({ color: '#2b2b28', roughness: 0.5, metalness: 0.3 });
-  monitor.add(box(0.26, 0.02, 0.16, metal, 0, 0.8, -3.35)); // stand foot
-  monitor.add(box(0.05, 0.26, 0.05, metal, 0, 0.93, -3.4)); // stand neck
+  monitor.add(box(0.34, 0.02, 0.20, metal, 0, 0.8, -3.35)); // stand foot
+  monitor.add(box(0.06, 0.34, 0.06, metal, 0, 0.97, -3.4)); // stand neck
   const bezelMat = mat({
     color: '#17171a',
     emissive: new THREE.Color('#ffb060'),
@@ -369,7 +369,7 @@ export function buildRoom(scene: THREE.Scene): RoomHandles {
     roughness: 0.4,
     metalness: 0.2,
   });
-  const bezel = box(1.02, 0.63, 0.05, bezelMat, 0, 1.2, -3.42);
+  const bezel = box(1.54, 0.94, 0.05, bezelMat, 0, 1.34, -3.42);
   monitor.add(bezel);
 
   const screenMat = mat({
@@ -379,10 +379,10 @@ export function buildRoom(scene: THREE.Scene): RoomHandles {
     roughness: 0.32,
     metalness: 0.0,
   });
-  const SCREEN_W = 0.92;
-  const SCREEN_H = 0.53;
+  const SCREEN_W = 1.44;
+  const SCREEN_H = 0.84;
   const screen = new THREE.Mesh(track(new THREE.PlaneGeometry(SCREEN_W, SCREEN_H)), screenMat);
-  screen.position.set(0, 1.2, -3.394);
+  screen.position.set(0, 1.34, -3.394);
   monitor.add(screen);
   scene.add(monitor);
 
