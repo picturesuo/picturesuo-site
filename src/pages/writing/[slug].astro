@@ -10,6 +10,19 @@ export async function getStaticPaths() {
 
 const { entry } = Astro.props;
 const { Content } = await render(entry);
+
+// Continuations of this piece, oldest first, so the page reads forward in time.
+const threads = (await getCollection('threads', ({ data }) => !data.draft))
+  .filter((t) => t.data.parent === entry.id)
+  .sort((a, b) => a.data.addedAt.getTime() - b.data.addedAt.getTime());
+
+const rendered = await Promise.all(
+  threads.map(async (t) => ({ entry: t, Body: (await render(t)).Content }))
+);
+
+const anchor = (d: Date) => `c-${d.toISOString().slice(0, 10)}`;
+const edits = [...entry.data.edits].sort((a, b) => b.date.getTime() - a.date.getTime());
+const lastTouched = threads.length ? threads[threads.length - 1].data.addedAt : entry.data.publishedAt;
 ---
 
 <SiteLayout title={entry.data.title} description={entry.data.summary}>
@@ -22,9 +35,54 @@ const { Content } = await render(entry);
         <time datetime={entry.data.publishedAt.toISOString()}
           >{formatDate(entry.data.publishedAt)}</time
         >{entry.data.updatedAt && <span>Updated {formatDate(entry.data.updatedAt)}</span>}
+        {
+          rendered.length > 0 && (
+            <span>
+              {rendered.length} continuation{rendered.length === 1 ? '' : 's'} · last added{' '}
+              {formatDate(lastTouched)}
+            </span>
+          )
+        }
       </div>
     </header>
     <div class="prose"><Content /></div>
+
+    {
+      rendered.length > 0 && (
+        <section class="thread">
+          {rendered.map(({ entry: t, Body }) => (
+            <article class="thread-part" id={anchor(t.data.addedAt)}>
+              <div class="thread-rule">
+                <a class="thread-date" href={`#${anchor(t.data.addedAt)}`}>
+                  <time datetime={t.data.addedAt.toISOString()}>
+                    Continued · {formatDate(t.data.addedAt)}
+                  </time>
+                </a>
+              </div>
+              {t.data.title && <h2>{t.data.title}</h2>}
+              <div class="prose">
+                <Body />
+              </div>
+            </article>
+          ))}
+        </section>
+      )
+    }
+
+    {
+      edits.length > 0 && (
+        <section class="edits">
+          <p class="section-label">Edited since publishing</p>
+          <ul>
+            {edits.map((e) => (
+              <li>
+                <time datetime={e.date.toISOString()}>{formatDate(e.date)}</time> — {e.note}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
     {
       entry.data.originalUrl && (
         <p class="callout">
