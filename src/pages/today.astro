@@ -1,0 +1,450 @@
+---
+/**
+ * The daily check-in. Five counts, one tick, maybe one private line, Save -
+ * from a phone, in under two minutes, straight into the repository.
+ *
+ * The log that ships with this build is embedded so the page draws instantly;
+ * the browser then re-reads the live file from GitHub so the streak and the
+ * last fourteen days are the truth, not the last deploy.
+ */
+import SiteLayout from '../layouts/SiteLayout.astro';
+import log from '../data/log.json';
+
+const config = {
+  public: { owner: 'picturesuo', repo: 'picturesuo-site', branch: 'main' },
+  private: { owner: 'picturesuo', repo: 'picturesuo-life-log', branch: 'main' },
+  progressHref: '/progress/',
+};
+---
+
+<SiteLayout title="Today" description="The daily check-in.">
+  <div class="page-shell today" data-today data-config={JSON.stringify(config)}>
+    <script is:inline type="application/json" data-log set:html={JSON.stringify(log)} />
+
+    <header class="article-header">
+      <p class="page-kicker">Today · <span data-day-label>…</span></p>
+      <h1>What happened?</h1>
+    </header>
+
+    <section class="top">
+      <p class="streak" data-streak>…</p>
+      <div class="strip" data-strip aria-label="The last fourteen days"></div>
+      <p class="source muted" data-source>from the last build</p>
+      <div class="gap" data-gap hidden>
+        <p data-gap-text></p>
+        <button type="button" class="button" data-gap-button>Log yesterday too</button>
+      </div>
+    </section>
+
+    <form class="checkin" data-form>
+      <div class="dayswitch" role="group" aria-label="Which day">
+        <button type="button" class="day on" data-day="today" aria-pressed="true">Today</button>
+        <button type="button" class="day" data-day="yesterday" aria-pressed="false"
+          >Yesterday</button
+        >
+      </div>
+
+      <div class="rows" data-rows></div>
+
+      <label class="flagline">
+        <input type="checkbox" data-flag />
+        <span>Broke an anti-goal</span>
+      </label>
+
+      <label class="noteline">
+        <span class="row-label">One line, private</span>
+        <input
+          type="text"
+          data-note
+          autocomplete="off"
+          enterkeyhint="done"
+          placeholder="Goes to the life-log, never the site"
+        />
+      </label>
+
+      <button type="submit" class="button save" data-save>Save</button>
+      <div class="status" data-status aria-live="polite"></div>
+    </form>
+
+    <details class="setup" data-setup>
+      <summary><span>Device setup</span> <em data-setup-state></em></summary>
+      <form class="tokenform" data-token-form>
+        <p class="muted">
+          A fine-grained GitHub token with <b>Contents: read and write</b> on exactly two repositories,
+          <code>picturesuo-site</code> and <code>picturesuo-life-log</code>. It is kept in this
+          browser's storage and sent only to api.github.com. Anyone who can use this unlocked phone
+          can use it; give it an expiry and delete it on GitHub if the phone goes missing. The steps
+          are in <code>docs/RUNBOOK.md</code>.
+        </p>
+        <label>
+          <span>Token</span>
+          <input type="password" data-token autocomplete="off" spellcheck="false" />
+        </label>
+        <label>
+          <span>Expires (optional, so the page can warn you)</span>
+          <input type="date" data-expires />
+        </label>
+        <label>
+          <span>Branch (leave as main)</span>
+          <input type="text" data-branch autocomplete="off" spellcheck="false" />
+        </label>
+        <div class="setup-actions">
+          <button type="submit" class="button">Check and save on this device</button>
+          <button type="button" class="button ghost" data-forget hidden>Forget token</button>
+        </div>
+        <p class="tokenstatus" data-token-status></p>
+      </form>
+    </details>
+  </div>
+</SiteLayout>
+
+<script>
+  import { mount } from '../lib/today/app';
+  import { parseLog } from '../lib/today/core';
+
+  const root = document.querySelector<HTMLElement>('[data-today]');
+  if (root) {
+    const config = JSON.parse(root.dataset.config || '{}');
+    const embedded = root.querySelector('[data-log]')?.textContent || '[]';
+    mount(root, config, parseLog(embedded));
+  }
+</script>
+
+<style>
+  .today {
+    max-width: 560px;
+  }
+  .today .article-header {
+    margin-bottom: 1.25rem;
+  }
+  .top {
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 4px;
+    padding: 0.9rem 1rem;
+  }
+  .streak {
+    margin: 0 0 0.6rem;
+    font-size: 0.95rem;
+    color: var(--muted);
+  }
+  .streak b {
+    color: var(--ink);
+    font-size: 1.4rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(14, 1fr);
+    gap: 3px;
+  }
+  .strip :global(.cell) {
+    all: unset;
+    box-sizing: border-box;
+    aspect-ratio: 1 / 1.25;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--paper-deep) 74%, var(--line));
+    box-shadow: inset 0 0 0 1px rgba(23, 23, 20, 0.05);
+    position: relative;
+    display: block;
+    overflow: hidden;
+    cursor: default;
+  }
+  .strip :global(.cell:not(:disabled)) {
+    cursor: pointer;
+  }
+  .strip :global(.cell .fill) {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column-reverse;
+  }
+  .strip :global(.cell .fill span) {
+    display: block;
+    width: 100%;
+    flex: none;
+  }
+  .strip :global(.cell i) {
+    position: absolute;
+    inset: auto 0 0;
+    font-style: normal;
+    font-size: 0.55rem;
+    line-height: 1;
+    text-align: center;
+    color: var(--muted);
+    padding-bottom: 2px;
+    pointer-events: none;
+    mix-blend-mode: multiply;
+  }
+  .strip :global(.cell.today) {
+    box-shadow: inset 0 0 0 2px var(--ink);
+  }
+  .strip :global(.cell.picked:not(.today)) {
+    box-shadow: inset 0 0 0 2px var(--muted);
+  }
+  .strip :global(.cell:focus-visible) {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+  .strip :global(.cell.flag)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      transparent 38%,
+      var(--ink) 38%,
+      var(--ink) 62%,
+      transparent 62%
+    );
+    opacity: 0.72;
+  }
+  .source {
+    margin: 0.5rem 0 0;
+    font-size: 0.78rem;
+  }
+  .gap {
+    margin-top: 0.8rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid var(--line);
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .gap[hidden] {
+    display: none;
+  }
+  .gap p {
+    margin: 0;
+    font-weight: 700;
+  }
+
+  .checkin {
+    margin-top: 1.25rem;
+  }
+  .dayswitch {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 3px;
+    margin-bottom: 1rem;
+  }
+  .day {
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--muted);
+    background: transparent;
+    border: 0;
+    border-radius: 999px;
+    padding: 0.4rem 1rem;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .day.on {
+    color: var(--paper);
+    background: var(--ink);
+  }
+  .rows {
+    display: grid;
+    gap: 0.6rem;
+  }
+  .rows :global(.row) {
+    display: grid;
+    grid-template-columns: 6.2rem 1fr;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .today :global(.row-label) {
+    font-size: 0.9rem;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .today :global(.sw) {
+    width: 0.72rem;
+    height: 0.72rem;
+    border-radius: 2px;
+    display: inline-block;
+    flex: none;
+  }
+  .rows :global(.taps) {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+  }
+  .rows :global(.tap) {
+    font: inherit;
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+    min-height: 48px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.55);
+    color: var(--muted);
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .rows :global(.tap.on) {
+    color: var(--paper);
+    background: var(--c, var(--ink));
+    border-color: var(--c, var(--ink));
+    font-weight: 700;
+  }
+  /* A chosen zero is a fact, not an activity: keep it out of the track colour. */
+  .rows :global(.tap.on[data-n='0']) {
+    background: var(--muted);
+    border-color: var(--muted);
+  }
+  .rows :global(.tap:focus-visible) {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+  .flagline {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin: 1rem 0 0.75rem;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .flagline input {
+    width: 1.4rem;
+    height: 1.4rem;
+    margin: 0;
+    accent-color: var(--ink);
+  }
+  .noteline {
+    display: grid;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+  }
+  .noteline input,
+  .tokenform input {
+    font: inherit;
+    font-size: 1rem;
+    padding: 0.65rem 0.75rem;
+    min-height: 48px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.7);
+    color: var(--ink);
+    width: 100%;
+  }
+  .noteline input:focus,
+  .tokenform input:focus {
+    outline: 2px solid var(--blue);
+    outline-offset: 1px;
+  }
+  .save {
+    width: 100%;
+    min-height: 52px;
+    font-size: 1.05rem;
+    justify-content: center;
+  }
+  .save:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .status {
+    margin-top: 1rem;
+    font-size: 0.92rem;
+  }
+  .status :global(.steps) {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 0.5rem;
+    display: grid;
+    gap: 0.3rem;
+  }
+  .status :global(.steps li) {
+    padding-left: 1.4rem;
+    position: relative;
+  }
+  .status :global(.steps li::before) {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: var(--green);
+    font-weight: 700;
+  }
+  .status :global(.steps li.bad::before) {
+    content: '✕';
+    color: var(--coral);
+  }
+  .status :global(.bad),
+  .tokenstatus.bad,
+  .setup em.bad {
+    color: var(--coral);
+  }
+  .status :global(.muted),
+  .tokenstatus.muted {
+    color: var(--muted);
+  }
+  .tokenstatus.ok {
+    color: var(--green);
+  }
+
+  .setup {
+    margin-top: 2rem;
+    border-top: 1px solid var(--line);
+    padding-top: 0.75rem;
+    font-size: 0.92rem;
+  }
+  .setup summary {
+    cursor: pointer;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .setup summary em {
+    font-style: normal;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .tokenform {
+    display: grid;
+    gap: 0.75rem;
+    padding-top: 0.5rem;
+  }
+  .tokenform label {
+    display: grid;
+    gap: 0.3rem;
+  }
+  .tokenform label span {
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .tokenform code {
+    font-size: 0.85em;
+  }
+  .setup-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .setup-actions .button {
+    min-height: 44px;
+  }
+  .button.ghost {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--line);
+  }
+  .tokenstatus {
+    margin: 0;
+    min-height: 1.4em;
+  }
+
+  @media (max-width: 420px) {
+    .rows :global(.row) {
+      grid-template-columns: 1fr;
+      gap: 0.25rem;
+    }
+  }
+</style>

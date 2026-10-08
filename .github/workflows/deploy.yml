@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Test the check-in logic
+        run: npm test
+
       - name: Build Astro site
         run: npm run build
         env:

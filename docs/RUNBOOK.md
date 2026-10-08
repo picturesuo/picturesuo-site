@@ -4,6 +4,68 @@ Everything that still needs human hands, and everything that does not.
 
 ## The two things only you can do
 
+### 0. Put a GitHub token on your phone for the check-in (5 minutes, once per phone)
+
+[picturesuo.com/today/](https://picturesuo.com/today/) is the daily check-in:
+five counts, one tick, one optional private line, Save. It commits straight
+to GitHub from the phone, so the phone needs a token. One token, two
+repositories, nothing else.
+
+1. GitHub → profile picture → **Settings** → **Developer settings** →
+   **Personal access tokens** → **Fine-grained tokens** → **Generate new token**
+2. **Token name:** `phone check-in`. **Expiration:** 90 days is a good habit;
+   the page will nag you a week before it runs out if you type the date in.
+3. **Resource owner:** picturesuo. **Repository access:** *Only select
+   repositories* → pick `picturesuo-site` and `picturesuo-life-log`. Nothing
+   else.
+4. **Permissions** → **Repository permissions** → **Contents** → *Read and
+   write*. Leave every other permission at *No access*; Metadata is added by
+   GitHub automatically and is read-only.
+5. **Generate token**, copy it.
+6. On the phone, open picturesuo.com/today/, enter the site password, scroll to
+   **Device setup**, paste the token, type the expiry date, tap **Check and
+   save on this device**. The page reads both repositories to prove the token
+   works before it keeps it, and refuses if the life-log is not private.
+
+Then the morning is: open the page, tap, Save. Counts go to
+`src/data/log.json` in this repo (one commit, that one file); the counts plus
+the line go to `checkins/YYYY-MM-DD.md` in the private repo (one commit, that
+one file). The calendar at `/progress/` picks the day up on the next deploy,
+which the commit itself triggers. A skipped day is never filled in with zeros
+- the Save button stays disabled until something is non-zero or the anti-goal
+box is ticked.
+
+**What the token can and cannot do.** It is stored in the phone browser's
+localStorage for picturesuo.com, in the clear. The site password gates the
+page that reads it, and nothing else does, but anyone holding the unlocked
+phone can use the page, and any script running on picturesuo.com (today that
+is the site's own code and, if enabled, Cloudflare's analytics script) could
+read it. It can read and write file contents in those two repositories and
+nothing else: no settings, no secrets, no other repository, no account.
+
+- **Lost or shared phone:** GitHub → the same *Fine-grained tokens* page →
+  **Delete** next to `phone check-in`. That kills it everywhere at once.
+- **Removing it from a phone you still have:** **Device setup** → **Forget
+  token**. (Or clear site data for picturesuo.com.)
+- **Expired:** the page says "GitHub rejected the token"; generate a new one
+  and paste it in the same place. The old one is already dead.
+- **Branch:** the *Branch* field exists so a test token can write to a scratch
+  branch. Leave it as `main`.
+
+### 0b. Register the evening nudge (2 minutes, once)
+
+The 8am task (`~/.claude/scheduled-tasks/picturesuo-daily-heartbeat/`) now
+opens the check-in page and says whether yesterday is logged, instead of
+running the card in chat. A second task, `picturesuo-evening-nudge`, pushes
+one reminder at 21:00 if today is still not logged. Both definitions are
+versioned in the private repo under `automation/`.
+
+To install the evening one: copy
+`picturesuo-life-log/automation/picturesuo-evening-nudge/` into
+`~/.claude/scheduled-tasks/`, then in the Claude app's scheduled tasks add it
+at **21:00 daily**. The push reaches the phone only while Remote Control is
+connected to that session; otherwise it is a desktop notification.
+
 ### 1. Paste the daily card into ChatGPT (2 minutes)
 
 The prompt is written and committed in the private repo at
