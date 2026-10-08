@@ -19,7 +19,7 @@
  * against the local date, never the build machine's clock.
  */
 import log from '../data/log.json';
-import { CATEGORIES } from '../lib/categoryCalendar.ts';
+import { CATEGORIES, clampCount } from '../lib/categoryCalendar.ts';
 
 interface Props {
   start?: string;
@@ -45,7 +45,7 @@ const days = Array.from({ length: weeks * 7 }, (_, i) => {
   const vals: Record<string, number> = {};
   let total = 0;
   for (const t of CATEGORIES) {
-    const v = e ? Number(e[t.key] ?? 0) : 0;
+    const v = e ? clampCount(e[t.key]) : 0;
     vals[t.key] = v;
     total += v;
   }

@@ -42,15 +42,15 @@ test('five categories, in the order the site uses, each with a token colour', ()
   for (const c of CATEGORIES) assert.match(c.color, /^var\(--[a-z]+\)$/);
 });
 
-test('clampCount bounds every input to 0..4', () => {
-  assert.equal(clampCount(0), 0);
-  assert.equal(clampCount(4), 4);
-  assert.equal(clampCount(5), MAX_COUNT);
-  assert.equal(clampCount(99), MAX_COUNT);
+test('clampCount accepts only an integer number 0..4; anything else is 0', () => {
+  for (let n = 0; n <= MAX_COUNT; n++) assert.equal(clampCount(n), n);
+  assert.equal(clampCount(5), 0, 'above the range is not clamped down');
+  assert.equal(clampCount(99), 0);
   assert.equal(clampCount(-1), 0);
-  assert.equal(clampCount(2.9), 2);
-  assert.equal(clampCount('3'), 3);
+  assert.equal(clampCount(2.9), 0, 'a fraction is not rounded');
+  assert.equal(clampCount('3'), 0, 'a numeric string is not parsed');
   assert.equal(clampCount('x'), 0);
+  assert.equal(clampCount(true), 0);
   assert.equal(clampCount(NaN), 0);
   assert.equal(clampCount(Infinity), 0, 'not finite is not a count');
   assert.equal(clampCount(undefined), 0);
@@ -79,13 +79,14 @@ test('normalizeLog: empty, malformed, duplicate dates', () => {
     { writing: 2 },
     null,
     entry('2026-10-06', { writing: 2 }), // later duplicate wins
-    entry('2026-10-07', { clay: 7, posts: '1', photos: -2 }, true),
+    entry('2026-10-07', { tech: 3, clay: 7, posts: '1', photos: -2 }, true),
   ]);
   assert.deepEqual([...log.keys()], ['2026-10-06', '2026-10-07']);
   assert.equal(log.get('2026-10-06')!.counts.writing, 2);
   const d7 = log.get('2026-10-07')!;
-  assert.equal(d7.counts.clay, 4);
-  assert.equal(d7.counts.posts, 1);
+  assert.equal(d7.counts.tech, 3);
+  assert.equal(d7.counts.clay, 0, 'out of range is not a count');
+  assert.equal(d7.counts.posts, 0, 'a string is not a count');
   assert.equal(d7.counts.photos, 0);
   assert.equal(d7.flag, true);
 });

@@ -107,14 +107,13 @@ export function mondayIndex(d: Date): number {
 }
 
 /**
- * Coerce a raw count into 0..MAX_COUNT. Anything that is not a finite number
- * reads as zero; fractions round down; out-of-range values are clamped rather
- * than thrown, because a bad export must not take the page down.
+ * A count is an integer number 0..MAX_COUNT, exactly as the export writes it.
+ * Anything else (a string, a fraction, out of range, missing) reads as zero
+ * rather than being coerced into a count nobody recorded, and rather than
+ * thrown, because a bad export must not take the page down.
  */
 export function clampCount(v: unknown): number {
-  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
-  if (!Number.isFinite(n)) return 0;
-  return Math.min(MAX_COUNT, Math.max(0, Math.floor(n)));
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= MAX_COUNT ? v : 0;
 }
 
 /**
