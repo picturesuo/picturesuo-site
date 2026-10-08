@@ -13,7 +13,11 @@ import {
   cellBackground,
   clampCount,
   describeDay,
+  homeIndex,
+  isFuture,
+  localToday,
   normalizeLog,
+  scoreGrid,
 } from './categoryCalendar.ts';
 
 const writing = CATEGORIES[0];
@@ -53,6 +57,17 @@ test('clampCount bounds every input to 0..4', () => {
   assert.equal(clampCount(null), 0);
 });
 
+test('localToday is the calendar date in the local timezone, not UTC', () => {
+  // Half past eleven at night, local time: still that day locally even when
+  // the UTC date has already rolled over (or has not yet).
+  const late = new Date(2026, 9, 8, 23, 30);
+  assert.equal(localToday(late), '2026-10-08');
+  const early = new Date(2026, 9, 8, 0, 15);
+  assert.equal(localToday(early), '2026-10-08');
+  const jan = new Date(2027, 0, 1, 12);
+  assert.equal(localToday(jan), '2027-01-01');
+});
+
 test('normalizeLog: empty, malformed, duplicate dates', () => {
   assert.equal(normalizeLog([]).size, 0);
   assert.equal(normalizeLog(null).size, 0);
@@ -76,27 +91,20 @@ test('normalizeLog: empty, malformed, duplicate dates', () => {
 });
 
 test('empty log: every live day is absent, nothing is scored, nothing is invented', () => {
-  const grid = buildCategoryGrid(normalizeLog([]), writing, {
-    start: '2026-09-01',
-    weeks: 6,
-    today: '2026-10-08',
-  });
+  const grid = buildCategoryGrid(normalizeLog([]), writing, { start: '2026-09-01', weeks: 6 });
   assert.equal(grid.days.length, 42);
   assert.ok(grid.days.every((d) => !d.recorded && d.count === 0 && !d.flag));
-  assert.equal(grid.recordedDays, 0);
-  assert.equal(grid.activeDays, 0);
-  assert.equal(grid.streak, 0);
-  assert.equal(grid.longest, 0);
-  assert.equal(grid.flagged, 0);
+  const s = scoreGrid(grid.days, '2026-10-08');
+  assert.equal(s.recordedDays, 0);
+  assert.equal(s.activeDays, 0);
+  assert.equal(s.streak, 0);
+  assert.equal(s.longest, 0);
+  assert.equal(s.flagged, 0);
 });
 
 test('grid opens on the Monday before start and marks padding days', () => {
   // 2026-09-01 is a Tuesday, so the grid starts Monday 2026-08-31.
-  const grid = buildCategoryGrid(normalizeLog([]), writing, {
-    start: '2026-09-01',
-    weeks: 2,
-    today: '2026-10-08',
-  });
+  const grid = buildCategoryGrid(normalizeLog([]), writing, { start: '2026-09-01', weeks: 2 });
   assert.equal(grid.days[0].date, '2026-08-31');
   assert.equal(grid.days[0].weekday, 0);
   assert.equal(grid.days[0].before, true);
@@ -108,11 +116,7 @@ test('grid opens on the Monday before start and marks padding days', () => {
 });
 
 test('a Monday start has no padding', () => {
-  const grid = buildCategoryGrid(normalizeLog([]), writing, {
-    start: '2026-09-07',
-    weeks: 1,
-    today: '2026-10-08',
-  });
+  const grid = buildCategoryGrid(normalizeLog([]), writing, { start: '2026-09-07', weeks: 1 });
   assert.equal(grid.days[0].date, '2026-09-07');
   assert.ok(grid.days.every((d) => !d.before));
 });
@@ -123,7 +127,8 @@ test('mixed entries: counts land on the right date, per category', () => {
     entry('2026-10-07', { clay: 4, posts: 1 }, true),
     entry('2026-10-08', { writing: 2, clay: 1 }),
   ]);
-  const opts = { start: '2026-10-05', weeks: 1, today: '2026-10-08' };
+  const opts = { start: '2026-10-05', weeks: 1 };
+  const today = '2026-10-08';
   const clayGrid = buildCategoryGrid(log, clay, opts);
   const byDate = Object.fromEntries(clayGrid.days.map((d) => [d.date, d]));
   assert.equal(byDate['2026-10-05'].recorded, false);
@@ -141,37 +146,47 @@ test('mixed entries: counts land on the right date, per category', () => {
   assert.equal(w['2026-10-07'].flag, true, 'anti-goal survives every category');
   assert.equal(w['2026-10-08'].count, 2);
 
-  assert.equal(clayGrid.recordedDays, 3);
-  assert.equal(clayGrid.activeDays, 2);
-  assert.equal(clayGrid.streak, 2);
-  assert.equal(clayGrid.longest, 2);
-  assert.equal(clayGrid.flagged, 1);
-  assert.equal(writingGrid.activeDays, 1);
-  assert.equal(writingGrid.streak, 1);
+  const c = scoreGrid(clayGrid.days, today);
+  assert.equal(c.recordedDays, 3);
+  assert.equal(c.activeDays, 2);
+  assert.equal(c.streak, 2);
+  assert.equal(c.longest, 2);
+  assert.equal(c.flagged, 1);
+  const ws = scoreGrid(writingGrid.days, today);
+  assert.equal(ws.activeDays, 1);
+  assert.equal(ws.streak, 1);
 });
 
 test('recorded zero and absent day are different cells and different sentences', () => {
   const log = normalizeLog([entry('2026-10-06')]);
-  const grid = buildCategoryGrid(log, writing, {
-    start: '2026-10-05',
-    weeks: 1,
-    today: '2026-10-08',
-  });
+  const grid = buildCategoryGrid(log, writing, { start: '2026-10-05', weeks: 1 });
+  const today = '2026-10-08';
   const zero = grid.days.find((d) => d.date === '2026-10-06')!;
   const absent = grid.days.find((d) => d.date === '2026-10-05')!;
   const future = grid.days.find((d) => d.date === '2026-10-09')!;
   assert.equal(zero.recorded, true);
   assert.equal(zero.count, 0);
   assert.equal(absent.recorded, false);
-  assert.equal(absent.future, false);
+  assert.equal(isFuture(absent, today), false);
   assert.equal(future.recorded, false);
-  assert.equal(future.future, true);
-  assert.equal(describeDay(zero, writing), 'Tue, Oct 6, 2026: writing 0, recorded');
-  assert.equal(describeDay(absent, writing), 'Mon, Oct 5, 2026: no entry');
-  assert.equal(describeDay(future, writing), 'Fri, Oct 9, 2026: not yet');
+  assert.equal(isFuture(future, today), true);
+  assert.equal(describeDay(zero, writing, today), 'Tue, Oct 6, 2026: writing 0, recorded');
+  assert.equal(describeDay(absent, writing, today), 'Mon, Oct 5, 2026: no entry');
+  assert.equal(describeDay(future, writing, today), 'Fri, Oct 9, 2026: not yet');
   // Neither draws a colour; the component tells them apart with a marker.
   assert.equal(cellBackground(zero, writing), '');
   assert.equal(cellBackground(absent, writing), '');
+});
+
+test('the same day reads as today or not yet depending on whose today it is', () => {
+  const grid = buildCategoryGrid(normalizeLog([]), writing, { start: '2026-10-05', weeks: 1 });
+  const oct8 = grid.days.find((d) => d.date === '2026-10-08')!;
+  // The build machine has already rolled into the 9th; the viewer has not.
+  assert.equal(isFuture(oct8, '2026-10-08'), false);
+  assert.equal(describeDay(oct8, writing, '2026-10-08'), 'Thu, Oct 8, 2026: no entry');
+  // A viewer a day behind still sees the 8th as not yet.
+  assert.equal(isFuture(oct8, '2026-10-07'), true);
+  assert.equal(describeDay(oct8, writing, '2026-10-07'), 'Thu, Oct 8, 2026: not yet');
 });
 
 test('describeDay and cellBackground across the count range', () => {
@@ -181,14 +196,10 @@ test('describeDay and cellBackground across the count range', () => {
     entry('2026-10-07', { clay: 3 }),
     entry('2026-10-08', { clay: 4 }, true),
   ]);
-  const grid = buildCategoryGrid(log, clay, {
-    start: '2026-10-05',
-    weeks: 1,
-    today: '2026-10-08',
-  });
+  const grid = buildCategoryGrid(log, clay, { start: '2026-10-05', weeks: 1 });
   const [d1, d2, d3, d4] = grid.days;
-  assert.equal(describeDay(d1, clay), 'Mon, Oct 5, 2026: clay 1 of 4');
-  assert.equal(describeDay(d4, clay), 'Thu, Oct 8, 2026: clay 4 of 4, anti-goal');
+  assert.equal(describeDay(d1, clay, '2026-10-08'), 'Mon, Oct 5, 2026: clay 1 of 4');
+  assert.equal(describeDay(d4, clay, '2026-10-08'), 'Thu, Oct 8, 2026: clay 4 of 4, anti-goal');
   assert.equal(cellBackground(d1, clay), 'color-mix(in srgb, var(--coral) 28%, var(--paper-deep))');
   assert.equal(cellBackground(d2, clay), 'color-mix(in srgb, var(--coral) 50%, var(--paper-deep))');
   assert.equal(cellBackground(d3, clay), 'color-mix(in srgb, var(--coral) 74%, var(--paper-deep))');
@@ -207,41 +218,44 @@ test('a skipped day and a recorded zero both break a streak', () => {
     entry('2026-10-05', { writing: 0 }),
     entry('2026-10-06', { writing: 3 }),
   ]);
-  const grid = buildCategoryGrid(log, writing, {
-    start: '2026-10-01',
-    weeks: 2,
-    today: '2026-10-06',
-  });
-  assert.equal(grid.longest, 2);
-  assert.equal(grid.streak, 1);
-  assert.equal(grid.activeDays, 4);
-  assert.equal(grid.recordedDays, 5);
+  const grid = buildCategoryGrid(log, writing, { start: '2026-10-01', weeks: 2 });
+  const s = scoreGrid(grid.days, '2026-10-06');
+  assert.equal(s.longest, 2);
+  assert.equal(s.streak, 1);
+  assert.equal(s.activeDays, 4);
+  assert.equal(s.recordedDays, 5);
 });
 
 test('an unlogged today does not break the streak; an unlogged yesterday does', () => {
   const log = normalizeLog([entry('2026-10-06', { clay: 2 }), entry('2026-10-07', { clay: 4 })]);
-  const open = buildCategoryGrid(log, clay, { start: '2026-10-05', weeks: 1, today: '2026-10-08' });
-  assert.equal(open.streak, 2, 'today is still open');
-  const closed = buildCategoryGrid(log, clay, {
-    start: '2026-10-05',
-    weeks: 1,
-    today: '2026-10-09',
-  });
+  const grid = buildCategoryGrid(log, clay, { start: '2026-10-05', weeks: 1 });
+  assert.equal(scoreGrid(grid.days, '2026-10-08').streak, 2, 'today is still open');
+  const closed = scoreGrid(grid.days, '2026-10-09');
   assert.equal(closed.streak, 0, 'yesterday was skipped');
   assert.equal(closed.longest, 2);
+  // The viewer's clock decides: the same grid scored on the 7th is still live.
+  assert.equal(scoreGrid(grid.days, '2026-10-07').streak, 2);
 });
 
 test('future entries are not scored even if present', () => {
   const log = normalizeLog([entry('2026-10-09', { writing: 4 })]);
-  const grid = buildCategoryGrid(log, writing, {
-    start: '2026-10-05',
-    weeks: 1,
-    today: '2026-10-08',
-  });
+  const grid = buildCategoryGrid(log, writing, { start: '2026-10-05', weeks: 1 });
   const f = grid.days.find((d) => d.date === '2026-10-09')!;
-  assert.equal(f.future, true);
+  assert.equal(isFuture(f, '2026-10-08'), true);
   assert.equal(f.count, 4, 'the data is still shown');
-  assert.equal(grid.activeDays, 0, 'but not counted');
+  assert.equal(scoreGrid(grid.days, '2026-10-08').activeDays, 0, 'but not counted');
+  assert.equal(scoreGrid(grid.days, '2026-10-09').activeDays, 1, 'until the viewer gets there');
+});
+
+test('homeIndex: latest recorded live day, else today, else the first live day', () => {
+  const log = normalizeLog([entry('2026-10-06', { clay: 2 }), entry('2026-10-09', { clay: 1 })]);
+  const grid = buildCategoryGrid(log, clay, { start: '2026-10-06', weeks: 2 });
+  const at = (date: string) => grid.days.findIndex((d) => d.date === date);
+  assert.equal(homeIndex(grid.days, '2026-10-08'), at('2026-10-06'), 'the 9th is not yet');
+  assert.equal(homeIndex(grid.days, '2026-10-09'), at('2026-10-09'));
+  const empty = buildCategoryGrid(normalizeLog([]), clay, { start: '2026-10-06', weeks: 2 });
+  assert.equal(homeIndex(empty.days, '2026-10-08'), at('2026-10-08'), 'today, nothing recorded');
+  assert.equal(homeIndex(empty.days, '2026-10-01'), at('2026-10-06'), 'before the window opens');
 });
 
 test('month boundaries and a leap day', () => {
@@ -250,11 +264,7 @@ test('month boundaries and a leap day', () => {
     entry('2028-02-29', { writing: 2 }),
     entry('2028-03-01', { writing: 1 }),
   ]);
-  const grid = buildCategoryGrid(log, writing, {
-    start: '2028-02-28',
-    weeks: 6,
-    today: '2028-04-30',
-  });
+  const grid = buildCategoryGrid(log, writing, { start: '2028-02-28', weeks: 6 });
   const dates = grid.days.map((d) => d.date);
   assert.equal(dates[0], '2028-02-28');
   assert.equal(dates[1], '2028-02-29');
@@ -268,17 +278,14 @@ test('month boundaries and a leap day', () => {
     { week: 1, label: 'Mar' },
     { week: 5, label: 'Apr' },
   ]);
-  assert.equal(grid.activeDays, 2);
-  assert.equal(grid.longest, 2);
+  const s = scoreGrid(grid.days, '2028-04-30');
+  assert.equal(s.activeDays, 2);
+  assert.equal(s.longest, 2);
 });
 
 test('month labels keep their distance', () => {
   // 2026-09-01 is a Tuesday: the grid opens on Mon 08-31, a lone August week.
-  const grid = buildCategoryGrid(normalizeLog([]), writing, {
-    start: '2026-09-01',
-    weeks: 10,
-    today: '2026-10-08',
-  });
+  const grid = buildCategoryGrid(normalizeLog([]), writing, { start: '2026-09-01', weeks: 10 });
   assert.deepEqual(grid.months, [
     { week: 1, label: 'Sep' },
     { week: 5, label: 'Oct' },
@@ -290,11 +297,7 @@ test('month labels keep their distance', () => {
 });
 
 test('a year boundary keeps dates monotonic', () => {
-  const grid = buildCategoryGrid(normalizeLog([]), writing, {
-    start: '2026-12-28',
-    weeks: 2,
-    today: '2027-01-20',
-  });
+  const grid = buildCategoryGrid(normalizeLog([]), writing, { start: '2026-12-28', weeks: 2 });
   const dates = grid.days.map((d) => d.date);
   assert.equal(dates[0], '2026-12-28');
   assert.equal(dates[3], '2026-12-31');
@@ -306,10 +309,6 @@ test('a year boundary keeps dates monotonic', () => {
 
 test('rejects an invalid start date instead of rendering garbage', () => {
   assert.throws(() =>
-    buildCategoryGrid(normalizeLog([]), writing, {
-      start: '2026-13-01',
-      weeks: 1,
-      today: '2026-10-08',
-    }),
+    buildCategoryGrid(normalizeLog([]), writing, { start: '2026-13-01', weeks: 1 }),
   );
 });

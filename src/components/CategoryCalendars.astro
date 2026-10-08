@@ -13,6 +13,11 @@
  * reads the date and count. One tab stop per calendar; arrow keys move
  * between days, Home and End jump to the first and last.
  *
+ * The grid itself is laid out at build time. Which day is today is the
+ * viewer's own, so the script below fades the days that have not come, writes
+ * the stats and the readout, and picks the tab-stop square once it knows the
+ * local date.
+ *
  * The model lives in src/lib/categoryCalendar.ts and has its own tests.
  */
 import log from '../data/log.json';
@@ -22,73 +27,39 @@ import {
   RAMP,
   buildCategoryGrid,
   cellBackground,
-  describeDay,
-  isoDate,
   normalizeLog,
 } from '../lib/categoryCalendar.ts';
 
 interface Props {
   start?: string;
   weeks?: number;
-  /** ISO date treated as today; defaults to the build date. */
-  today?: string;
 }
-const { start = '2026-09-01', weeks = 30, today = isoDate(new Date()) } = Astro.props;
+const { start = '2026-09-01', weeks = 30 } = Astro.props;
 
 const entries = normalizeLog(log);
-const grids = CATEGORIES.map((c) => buildCategoryGrid(entries, c, { start, weeks, today }));
+const grids = CATEGORIES.map((c) => buildCategoryGrid(entries, c, { start, weeks }));
 
 const WEEKDAYS = ['Mon', '', 'Wed', '', 'Fri', '', ''];
-
-// The one square that takes the tab stop: the latest recorded day in the
-// window, or today if nothing is recorded yet.
-function homeIndex(days: (typeof grids)[number]['days']): number {
-  let idx = -1;
-  for (let i = 0; i < days.length; i++) {
-    const d = days[i];
-    if (d.before || d.future) continue;
-    if (d.recorded) idx = i;
-  }
-  if (idx >= 0) return idx;
-  const t = days.findIndex((d) => d.date === today);
-  return t >= 0 ? t : days.findIndex((d) => !d.before);
-}
 ---
 
 <div class="catcals" style={`--weeks:${weeks}`}>
   {
     grids.map((g) => {
       const id = `cat-${g.category.key}`;
-      const home = homeIndex(g.days);
       return (
-        <section class="catcal" aria-labelledby={id} data-cat={g.category.key}>
+        <section
+          class="catcal"
+          aria-labelledby={id}
+          data-cat={g.category.key}
+          data-start={start}
+          data-weeks={g.weeks}
+        >
           <header class="cathead">
             <h3 id={id}>
               <i class="dot" style={`background:${g.category.color}`} />
               {g.category.name}
             </h3>
-            <p class="catstats">
-              {g.recordedDays > 0 ? (
-                <>
-                  <span>
-                    <b>{g.activeDays}</b> of <b>{g.recordedDays}</b> recorded days
-                  </span>
-                  <span>
-                    streak <b>{g.streak}</b>
-                  </span>
-                  <span>
-                    longest <b>{g.longest}</b>
-                  </span>
-                  {g.flagged > 0 && (
-                    <span>
-                      <b>{g.flagged}</b> slashed
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span>nothing recorded yet</span>
-              )}
-            </p>
+            <p class="catstats" />
           </header>
 
           <div class="catscroll" aria-label={`${g.category.name} calendar, scrolls sideways`}>
@@ -115,15 +86,13 @@ function homeIndex(days: (typeof grids)[number]['days']): number {
                       'day',
                       {
                         before: d.before,
-                        future: d.future,
                         zero: d.recorded && d.count === 0,
                         flag: d.flag,
                       },
                     ]}
-                    tabindex={i === home ? 0 : -1}
+                    tabindex={-1}
                     data-i={i}
                     data-date={d.date}
-                    aria-label={describeDay(d, g.category)}
                     style={
                       cellBackground(d, g.category)
                         ? `background:${cellBackground(d, g.category)}`
@@ -135,9 +104,7 @@ function homeIndex(days: (typeof grids)[number]['days']): number {
             </div>
           </div>
 
-          <p class="catout" aria-live="polite">
-            {home >= 0 ? describeDay(g.days[home], g.category) : ''}
-          </p>
+          <p class="catout" aria-live="polite" />
 
           <p class="catlegend">
             <span>
@@ -174,11 +141,53 @@ function homeIndex(days: (typeof grids)[number]['days']): number {
 </div>
 
 <script>
-  // Roving focus: one tab stop per calendar, arrows walk the days.
+  import log from '../data/log.json';
+  import {
+    CATEGORIES,
+    buildCategoryGrid,
+    describeDay,
+    homeIndex,
+    isFuture,
+    localToday,
+    normalizeLog,
+    scoreGrid,
+  } from '../lib/categoryCalendar.ts';
+
+  const today = localToday();
+  const entries = normalizeLog(log);
+
   document.querySelectorAll<HTMLElement>('.catcal').forEach((cal) => {
+    const category = CATEGORIES.find((c) => c.key === cal.dataset.cat);
+    if (!category) return;
+    const grid = buildCategoryGrid(entries, category, {
+      start: cal.dataset.start || '',
+      weeks: Number(cal.dataset.weeks),
+    });
     const cells = Array.from(cal.querySelectorAll<HTMLButtonElement>('.day'));
     const out = cal.querySelector<HTMLElement>('.catout');
+    const stats = cal.querySelector<HTMLElement>('.catstats');
 
+    // The same layout the build rendered, now scored against the local date.
+    cells.forEach((cell, i) => {
+      const d = grid.days[i];
+      cell.classList.toggle('future', isFuture(d, today));
+      cell.setAttribute('aria-label', describeDay(d, category, today));
+    });
+    const home = cells[homeIndex(grid.days, today)];
+    if (home) {
+      home.tabIndex = 0;
+      if (out) out.textContent = home.getAttribute('aria-label') || '';
+    }
+    if (stats) {
+      const s = scoreGrid(grid.days, today);
+      stats.innerHTML = s.recordedDays
+        ? `<span><b>${s.activeDays}</b> of <b>${s.recordedDays}</b> recorded days</span>` +
+          `<span>streak <b>${s.streak}</b></span><span>longest <b>${s.longest}</b></span>` +
+          (s.flagged ? `<span><b>${s.flagged}</b> slashed</span>` : '')
+        : '<span>nothing recorded yet</span>';
+    }
+
+    // Roving focus: one tab stop per calendar, arrows walk the days.
     function show(cell: HTMLButtonElement) {
       cells.forEach((c) => {
         c.tabIndex = c === cell ? 0 : -1;
@@ -227,7 +236,6 @@ function homeIndex(days: (typeof grids)[number]['days']): number {
     // Open on this week when the grid is wider than the screen: scroll the
     // tab-stop square (the latest recorded day, or today) to the right edge.
     const scroller = cal.querySelector<HTMLElement>('.catscroll');
-    const home = cells.find((c) => c.tabIndex === 0);
     if (scroller && home && scroller.scrollWidth > scroller.clientWidth) {
       const pad = parseFloat(getComputedStyle(scroller).paddingRight) || 0;
       scroller.scrollLeft = home.offsetLeft + home.offsetWidth + pad - scroller.clientWidth + 16;
@@ -288,8 +296,10 @@ function homeIndex(days: (typeof grids)[number]['days']): number {
     font-weight: 700;
   }
 
-  /* The scroll container is the only thing that may scroll sideways. */
+  /* The scroll container is the only thing that may scroll sideways, and the
+     box a square measures its offsetLeft from. */
   .catscroll {
+    position: relative;
     overflow-x: auto;
     overscroll-behavior-x: contain;
     padding-bottom: 0.35rem;
@@ -462,7 +472,7 @@ function homeIndex(days: (typeof grids)[number]['days']): number {
     }
     /* Say so when the grid will scroll: on a phone it always does. */
     .catscroll::after {
-      content: 'Scrolls sideways · this week is on the right';
+      content: 'Scrolls sideways';
       display: block;
       margin-top: 0.4rem;
       font-size: 0.7rem;

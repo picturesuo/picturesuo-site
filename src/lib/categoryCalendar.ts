@@ -2,8 +2,11 @@
  * The model behind the per-category calendars on /progress/.
  *
  * Pure functions, no DOM: the component renders what these return and the test
- * file exercises them directly. Everything is computed in UTC from the ISO date
- * strings in src/data/log.json, which is how the rest of the site treats dates.
+ * file exercises them directly. Dates are the ISO date strings in
+ * src/data/log.json, laid out in UTC, which is how the rest of the site treats
+ * them. Which day is "today" is the viewer's local date, so everything that
+ * depends on it (future days, the stats, the home square) is scored in the
+ * browser, not at build time.
  *
  * Three kinds of day are kept apart on purpose:
  *   - absent:   no entry exists for the date. The day was skipped, or it has
@@ -11,7 +14,7 @@
  *   - recorded: an entry exists. Its count may be zero, and a recorded zero is
  *               a real statement ("I did none of this today") that must look
  *               different from a day with no entry at all.
- *   - future:   after the build date. Still absent, but not a skipped day.
+ *   - future:   after the viewer's today. Still absent, but not a skipped day.
  */
 
 export const CATEGORIES = [
@@ -45,8 +48,6 @@ export interface DayCell {
   week: number;
   /** Padding before the requested start date (the grid opens on a Monday). */
   before: boolean;
-  /** After the build date: not a skipped day, just one that has not come. */
-  future: boolean;
   /** An entry exists for this date. */
   recorded: boolean;
   /** Count for this category, clamped to 0..MAX_COUNT. 0 when not recorded. */
@@ -66,6 +67,10 @@ export interface CategoryGrid {
   weeks: number;
   days: DayCell[];
   months: MonthLabel[];
+}
+
+/** What the live window adds up to, for one category, as of a given today. */
+export interface GridStats {
   /** Days on or after start, up to and including today, that have an entry. */
   recordedDays: number;
   /** Of those, days where this category's count is above zero. */
@@ -81,6 +86,12 @@ const DAY = 86400000;
 
 export function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+/** The viewer's calendar date, in their own timezone. */
+export function localToday(now: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 export function parseIsoDate(s: string): Date {
@@ -134,10 +145,9 @@ export function normalizeLog(raw: unknown): Map<string, LogEntry> {
 export interface GridOptions {
   start: string;
   weeks: number;
-  /** The build date, ISO. Days after it are marked future. */
-  today: string;
 }
 
+/** Lay out the window: the same for every viewer, so it can render at build time. */
 export function buildCategoryGrid(
   log: Map<string, LogEntry>,
   category: Category,
@@ -146,7 +156,6 @@ export function buildCategoryGrid(
   const startDate = parseIsoDate(opts.start);
   const weeks = Math.max(1, Math.floor(opts.weeks));
   const first = new Date(startDate.getTime() - mondayIndex(startDate) * DAY);
-  const today = opts.today;
 
   const days: DayCell[] = [];
   const months: MonthLabel[] = [];
@@ -176,21 +185,29 @@ export function buildCategoryGrid(
       weekday,
       week,
       before: date < opts.start,
-      future: date > today,
       recorded: Boolean(entry),
       count: entry ? entry.counts[category.key] : 0,
       flag: Boolean(entry && entry.flag),
     });
   }
 
-  // Stats run over the live window only: on or after start, not in the future.
+  return { category, weeks, days, months };
+}
+
+/** A day after the viewer's today: not a skipped day, just one that has not come. */
+export function isFuture(day: DayCell, today: string): boolean {
+  return day.date > today;
+}
+
+/** Stats run over the live window only: on or after start, not in the future. */
+export function scoreGrid(days: DayCell[], today: string): GridStats {
   let recordedDays = 0;
   let activeDays = 0;
   let flagged = 0;
   let run = 0;
   let longest = 0;
   for (const day of days) {
-    if (day.before || day.future) continue;
+    if (day.before || isFuture(day, today)) continue;
     if (!day.recorded) {
       // A skipped day breaks a streak the same way a recorded zero does; the
       // difference between the two is shown, not scored. Today is the one
@@ -208,18 +225,23 @@ export function buildCategoryGrid(
       run = 0;
     }
   }
+  return { recordedDays, activeDays, streak: run, longest, flagged };
+}
 
-  return {
-    category,
-    weeks,
-    days,
-    months,
-    recordedDays,
-    activeDays,
-    streak: run,
-    longest,
-    flagged,
-  };
+/**
+ * The one square that takes the tab stop: the latest recorded day in the live
+ * window, or today if nothing is recorded yet, or the first live day.
+ */
+export function homeIndex(days: DayCell[], today: string): number {
+  let idx = -1;
+  for (let i = 0; i < days.length; i++) {
+    const d = days[i];
+    if (d.before || isFuture(d, today)) continue;
+    if (d.recorded) idx = i;
+  }
+  if (idx >= 0) return idx;
+  const t = days.findIndex((d) => d.date === today);
+  return t >= 0 ? t : days.findIndex((d) => !d.before);
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -237,11 +259,11 @@ export function formatDate(date: string): string {
 }
 
 /** The sentence a square reads out when tapped or focused. */
-export function describeDay(day: DayCell, category: Category): string {
+export function describeDay(day: DayCell, category: Category, today: string): string {
   const when = formatDate(day.date);
   const name = category.name.toLowerCase();
   let what: string;
-  if (day.future) what = 'not yet';
+  if (isFuture(day, today)) what = 'not yet';
   else if (!day.recorded) what = 'no entry';
   else if (day.count === 0) what = `${name} 0, recorded`;
   else what = `${name} ${day.count} of ${MAX_COUNT}`;

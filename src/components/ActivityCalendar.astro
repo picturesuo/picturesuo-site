@@ -14,28 +14,18 @@
  * A day counts as logged when an entry exists for it, whatever the counts say.
  * A day saved with five zeros is a statement and gets a dot; a day with no
  * entry at all stays plain paper. The two must never look the same.
+ *
+ * Which day is today is the viewer's own: the streak is scored in the browser
+ * against the local date, never the build machine's clock.
  */
 import log from '../data/log.json';
+import { CATEGORIES } from '../lib/categoryCalendar.ts';
 
 interface Props {
   start?: string;
   weeks?: number;
-  /** ISO date treated as today; defaults to the build date. */
-  today?: string;
 }
-const {
-  start = '2026-09-01',
-  weeks = 30,
-  today = new Date().toISOString().slice(0, 10),
-} = Astro.props;
-
-const TRACKS = [
-  { k: 'writing', n: 'Writing', c: 'var(--green)' },
-  { k: 'tech', n: 'Technical', c: 'var(--blue)' },
-  { k: 'clay', n: 'Clay', c: 'var(--coral)' },
-  { k: 'photos', n: 'Photos', c: 'var(--amber)' },
-  { k: 'posts', n: 'Posts', c: 'var(--plum)' },
-];
+const { start = '2026-09-01', weeks = 30 } = Astro.props;
 
 type Entry = Record<string, number | string | boolean>;
 const entries = log as Entry[];
@@ -54,9 +44,9 @@ const days = Array.from({ length: weeks * 7 }, (_, i) => {
   const e = byDate.get(date);
   const vals: Record<string, number> = {};
   let total = 0;
-  for (const t of TRACKS) {
-    const v = e ? Number(e[t.k] ?? 0) : 0;
-    vals[t.k] = v;
+  for (const t of CATEGORIES) {
+    const v = e ? Number(e[t.key] ?? 0) : 0;
+    vals[t.key] = v;
     total += v;
   }
   return {
@@ -69,7 +59,7 @@ const days = Array.from({ length: weeks * 7 }, (_, i) => {
   };
 });
 
-const logged = days.filter((d) => !d.before && d.date <= today && d.recorded).length;
+const logged = days.filter((d) => !d.before && d.recorded).length;
 const fmt = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
@@ -79,16 +69,16 @@ const fmt = new Intl.DateTimeFormat('en-US', {
 const startLabel = fmt.format(startDate);
 ---
 
-<div class="cal" data-start={start} data-today={today}>
+<div class="cal" data-start={start}>
   <div class="chips" role="group" aria-label="Filter the calendar by track">
     <button type="button" class="chip on" data-k="all" aria-pressed="true">
       <i class="dot all"></i>All together
     </button>
     {
-      TRACKS.map((t) => (
-        <button type="button" class="chip" data-k={t.k} aria-pressed="false">
-          <i class="dot" style={`background:${t.c}`} />
-          {t.n}
+      CATEGORIES.map((t) => (
+        <button type="button" class="chip" data-k={t.key} aria-pressed="false">
+          <i class="dot" style={`background:${t.color}`} />
+          {t.name}
         </button>
       ))
     }
@@ -110,17 +100,17 @@ const startLabel = fmt.format(startDate);
             title={
               (d.total
                 ? `${fmt.format(new Date(`${d.date}T00:00:00Z`))} — ` +
-                  TRACKS.filter((t) => d.vals[t.k])
-                    .map((t) => `${t.n.toLowerCase()} ${d.vals[t.k]}`)
+                  CATEGORIES.filter((t) => d.vals[t.key])
+                    .map((t) => `${t.name.toLowerCase()} ${d.vals[t.key]}`)
                     .join(' · ')
                 : `${fmt.format(new Date(`${d.date}T00:00:00Z`))} — ${d.recorded ? 'nothing done, recorded' : 'no entry'}`) +
               (d.flag ? ' · anti-goal' : '')
             }
           >
             {d.total > 0 &&
-              TRACKS.filter((t) => d.vals[t.k]).map((t) => (
+              CATEGORIES.filter((t) => d.vals[t.key]).map((t) => (
                 <span
-                  style={`height:${((d.vals[t.k] / d.total) * Math.min(1, d.total / 11) * 100).toFixed(2)}%;background:${t.c}`}
+                  style={`height:${((d.vals[t.key] / d.total) * Math.min(1, d.total / 11) * 100).toFixed(2)}%;background:${t.color}`}
                 />
               ))}
           </i>
@@ -132,10 +122,10 @@ const startLabel = fmt.format(startDate);
   <div class="calfoot">
     <div class="legend-row" data-mode="all">
       {
-        TRACKS.map((t) => (
+        CATEGORIES.map((t) => (
           <span>
-            <i class="sw" style={`background:${t.c}`} />
-            {t.n}
+            <i class="sw" style={`background:${t.color}`} />
+            {t.name}
           </span>
         ))
       }
@@ -157,18 +147,12 @@ const startLabel = fmt.format(startDate);
 </div>
 
 <script>
-  const TRACKS = [
-    { k: 'writing', n: 'Writing', c: 'var(--green)' },
-    { k: 'tech', n: 'Technical', c: 'var(--blue)' },
-    { k: 'clay', n: 'Clay', c: 'var(--coral)' },
-    { k: 'photos', n: 'Photos', c: 'var(--amber)' },
-    { k: 'posts', n: 'Posts', c: 'var(--plum)' },
-  ];
-  const RAMP = [0, 28, 50, 74, 100];
+  import { CATEGORIES, RAMP, localToday } from '../lib/categoryCalendar.ts';
+
+  const today = localToday();
 
   document.querySelectorAll<HTMLElement>('.cal').forEach((cal) => {
     const start = cal.dataset.start || '';
-    const today = cal.dataset.today || '9999-12-31';
     const cells = Array.from(cal.querySelectorAll<HTMLElement>('.cell'));
     const chips = Array.from(cal.querySelectorAll<HTMLButtonElement>('.chip'));
     const grid = cal.querySelector<HTMLElement>('.grid');
@@ -194,7 +178,7 @@ const startLabel = fmt.format(startDate);
       }).format(new Date(`${d}T00:00:00Z`));
 
     function render(mode: string) {
-      const track = TRACKS.find((t) => t.k === mode);
+      const track = CATEGORIES.find((t) => t.key === mode);
       data.forEach((d) => {
         d.el.innerHTML = '';
         d.el.style.background = '';
@@ -204,20 +188,20 @@ const startLabel = fmt.format(startDate);
         if (mode === 'all') {
           if (d.total > 0) {
             const fill = Math.min(1, d.total / 11);
-            TRACKS.forEach((t) => {
-              const v = d.vals[t.k] || 0;
+            CATEGORIES.forEach((t) => {
+              const v = d.vals[t.key] || 0;
               if (!v) return;
               const s = document.createElement('span');
               s.style.height = ((v / d.total) * fill * 100).toFixed(2) + '%';
-              s.style.background = t.c;
+              s.style.background = t.color;
               d.el.appendChild(s);
             });
           }
           d.el.title =
             `${label(d.date)} — ` +
             (d.total
-              ? TRACKS.filter((t) => d.vals[t.k])
-                  .map((t) => `${t.n.toLowerCase()} ${d.vals[t.k]}`)
+              ? CATEGORIES.filter((t) => d.vals[t.key])
+                  .map((t) => `${t.name.toLowerCase()} ${d.vals[t.key]}`)
                   .join(' · ')
               : d.recorded
                 ? 'nothing done, recorded'
@@ -226,27 +210,27 @@ const startLabel = fmt.format(startDate);
         } else if (track) {
           const v = d.vals[mode] || 0;
           if (v)
-            d.el.style.background = `color-mix(in srgb, ${track.c} ${RAMP[v]}%, var(--paper-deep))`;
+            d.el.style.background = `color-mix(in srgb, ${track.color} ${RAMP[v]}%, var(--paper-deep))`;
           d.el.title =
             `${label(d.date)} — ` +
-            (d.recorded ? `${track.n.toLowerCase()} ${v}` : 'no entry') +
+            (d.recorded ? `${track.name.toLowerCase()} ${v}` : 'no entry') +
             (d.flag ? ' · anti-goal' : '');
         }
       });
 
       if (grid)
-        grid.setAttribute('aria-label', (track ? track.n : 'All tracks') + ' activity calendar');
+        grid.setAttribute('aria-label', (track ? track.name : 'All tracks') + ' activity calendar');
 
       if (legend) {
         let html = '';
         if (mode === 'all') {
-          TRACKS.forEach((t) => {
-            html += `<span><i class="sw" style="background:${t.c}"></i>${t.n}</span>`;
+          CATEGORIES.forEach((t) => {
+            html += `<span><i class="sw" style="background:${t.color}"></i>${t.name}</span>`;
           });
         } else if (track) {
           html = '<span><i class="sw" style="background:var(--paper-deep)"></i>none</span>';
-          [28, 50, 74, 100].forEach((p, i) => {
-            html += `<span><i class="sw" style="background:color-mix(in srgb, ${track.c} ${p}%, var(--paper-deep))"></i>${i === 3 ? 'a lot' : ''}</span>`;
+          RAMP.slice(1).forEach((p, i, ramp) => {
+            html += `<span><i class="sw" style="background:color-mix(in srgb, ${track.color} ${p}%, var(--paper-deep))"></i>${i === ramp.length - 1 ? 'a lot' : ''}</span>`;
           });
         }
         html += '<span><i class="sw zero"></i>recorded, nothing done</span>';
