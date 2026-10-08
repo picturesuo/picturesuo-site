@@ -11,6 +11,7 @@
     "build": "astro check && astro build",
     "preview": "astro preview",
     "check": "astro check",
+    "test": "node --test src/lib/*.test.ts",
     "format:check": "prettier --check ."
   },
   "dependencies": {

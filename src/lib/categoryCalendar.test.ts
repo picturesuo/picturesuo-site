@@ -1,8 +1,9 @@
 /**
- * Run with:  node --test src/lib/categoryCalendar.test.ts
+ * Run with:  npm test
  *
- * Node strips the types itself; nothing is installed for this. The fixtures
- * below are synthetic and never belong in src/data/log.json.
+ * That is node --test over src/lib/*.test.ts. Node strips the types itself;
+ * nothing is installed for this. The fixtures below are synthetic and never
+ * belong in src/data/log.json.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
