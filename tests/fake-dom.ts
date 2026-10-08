@@ -100,7 +100,8 @@ export class FakeElement {
   }
 
   get textContent(): string {
-    return this.text + this.children.map((c) => c.textContent).join('');
+    const own = this.text || this.html.replace(/<[^>]+>/g, '');
+    return own + this.children.map((c) => c.textContent).join('');
   }
   set textContent(v: string) {
     this.children = [];

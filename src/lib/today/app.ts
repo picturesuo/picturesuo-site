@@ -383,6 +383,7 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
       return;
     }
     saving = true;
+    noteSeq++;
     paintSave();
     const pub = config.public;
     const priv = config.private;

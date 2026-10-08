@@ -2,8 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeElement, installDom } from './fake-dom.ts';
 import { mount, type Config } from '../src/lib/today/app.ts';
-import { localDate, makeEntry, privateNote, serializeLog } from '../src/lib/today/core.ts';
-import { encodeBase64 } from '../src/lib/today/github.ts';
+import {
+  localDate,
+  makeEntry,
+  noteBody,
+  privateNote,
+  serializeLog,
+} from '../src/lib/today/core.ts';
+import { decodeBase64, encodeBase64 } from '../src/lib/today/github.ts';
 
 const config: Config = {
   public: { owner: 'o', repo: 'site', branch: 'main' },
@@ -43,21 +49,40 @@ function page(): FakeElement {
   return root;
 }
 
-/** A GitHub whose private-repo reads wait until the test lets them answer. */
+/**
+ * A GitHub whose private-repo reads wait until the test lets them answer,
+ * and whose writes land in `files` so the test can read back what was
+ * committed. Held reads answer with the body the file had when they were
+ * issued, which is what a slow network does.
+ */
 function github(publicText: string, privateText: string) {
   const held: Array<() => void> = [];
-  const file = (text: string) =>
-    new Response(JSON.stringify({ type: 'file', content: encodeBase64(text), sha: 'sha1' }), {
+  const files = { public: publicText, private: privateText };
+  let holding = true;
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
-  const fetch = (url: string): Promise<Response> =>
-    url.includes('/repos/o/life-log/')
-      ? new Promise((resolve) => held.push(() => resolve(file(privateText))))
-      : Promise.resolve(file(publicText));
+  const file = (text: string) => json({ type: 'file', content: encodeBase64(text), sha: 'sha1' });
+  const fetch = (url: string, init?: RequestInit): Promise<Response> => {
+    const repo = url.includes('/repos/o/life-log/') ? 'private' : 'public';
+    if (init?.method === 'PUT') {
+      files[repo] = decodeBase64((JSON.parse(String(init.body)) as { content: string }).content);
+      return Promise.resolve(json({ commit: { sha: 'c1' }, content: { sha: 'sha2' } }));
+    }
+    if (repo === 'private' && holding) {
+      return new Promise((resolve) => held.push(() => resolve(file(privateText))));
+    }
+    return Promise.resolve(file(files[repo]));
+  };
   return {
     fetch,
     held,
+    files,
+    answerNewReadsAtOnce() {
+      holding = false;
+    },
     async answerPrivate() {
       for (const release of held.splice(0)) release();
       await idle();
@@ -67,6 +92,11 @@ function github(publicText: string, privateText: string) {
 
 async function idle(): Promise<void> {
   for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 0));
+}
+
+async function waitFor(ready: () => boolean): Promise<void> {
+  for (let i = 0; i < 200 && !ready(); i++) await new Promise((r) => setTimeout(r, 0));
+  assert.ok(ready(), 'the page settled');
 }
 
 const tap = (root: FakeElement, track: string, n: number) =>
@@ -109,6 +139,24 @@ test('a count tapped before the private note arrives still gets the prefill', as
     assert.equal(t.note.value, body);
     assert.equal(chosen(t.root, 'writing'), '2');
     assert.match(t.root.querySelector('[data-save]')!.textContent, /^Update /);
+  } finally {
+    t.done();
+  }
+});
+
+test('a note read still in flight when a save lands cannot repaint the saved line', async () => {
+  const t = await openLoggedDay('A');
+  try {
+    t.note.value = 'B';
+    t.note.dispatch('input');
+    t.gh.answerNewReadsAtOnce();
+    t.root.querySelector('[data-form]')!.dispatch('submit');
+    const status = t.root.querySelector('[data-status]')!;
+    await waitFor(() => /Logged/.test(status.textContent));
+    assert.equal(noteBody(t.gh.files.private), 'B');
+    assert.equal(t.note.value, 'B');
+    await t.gh.answerPrivate();
+    assert.equal(t.note.value, 'B');
   } finally {
     t.done();
   }
