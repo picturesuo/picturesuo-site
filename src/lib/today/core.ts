@@ -185,12 +185,20 @@ export function noteBody(text: string): string {
 }
 
 /**
- * What to commit for a day's private note: the typed line if there is one,
- * otherwise the line already in the file. A blank field means "leave the
- * note alone", so a correction to the counts never erases the words.
+ * What to commit for a day's private note. The field wins only when the user
+ * changed it from what the page showed (`shown`); otherwise the note already
+ * in the file is kept, so a correction to the counts never erases the words
+ * and a line edited by hand after the page loaded is not rolled back.
  */
-export function mergePrivateNote(entry: Entry, typed: string, current: string | null): string {
-  return privateNote(entry, typed.trim() || (current ? noteBody(current) : ''));
+export function mergePrivateNote(
+  entry: Entry,
+  field: string,
+  shown: string,
+  current: string | null,
+): string {
+  const typed = field.trim();
+  const changed = typed === shown ? '' : typed;
+  return privateNote(entry, changed || (current ? noteBody(current) : ''));
 }
 
 export function commitMessage(date: string, replacing: boolean): string {

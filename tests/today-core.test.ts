@@ -159,39 +159,66 @@ test('updating the counts with a blank field keeps the saved line', () => {
     { writing: 1, tech: 0, clay: 0, photos: 0, posts: 0 },
     false,
   );
-  const saved = mergePrivateNote(morning, 'threw two bowls', null);
+  const saved = mergePrivateNote(morning, 'threw two bowls', '', null);
   const evening = makeEntry(
     '2026-10-07',
     { writing: 2, tech: 0, clay: 0, photos: 0, posts: 0 },
     true,
   );
-  const updated = mergePrivateNote(evening, '', saved);
+  const updated = mergePrivateNote(evening, '', '', saved);
   assert.match(updated, /\nwriting: 2\n/);
   assert.match(updated, /\nflag: true\n/);
   assert.match(updated, /\n\nthrew two bowls\n$/);
-  assert.match(mergePrivateNote(evening, '  glazed instead  ', saved), /\n\nglazed instead\n$/);
-  assert.match(mergePrivateNote(evening, '', null), /_No note\._\n$/);
+  assert.match(mergePrivateNote(evening, '  glazed instead  ', '', saved), /\n\nglazed instead\n$/);
+  assert.match(mergePrivateNote(evening, '', '', null), /_No note\._\n$/);
 });
 
-test('a blank field keeps a hand-edited multi-line note verbatim', () => {
+test('an unchanged multi-line prefill is committed back verbatim', () => {
   const morning = makeEntry(
     '2026-10-07',
     { writing: 1, tech: 0, clay: 0, photos: 0, posts: 0 },
     false,
   );
-  const edited = mergePrivateNote(morning, 'threw two bowls', null).replace(
+  const edited = mergePrivateNote(morning, 'threw two bowls', '', null).replace(
     'threw two bowls',
     'threw two bowls\n\nboth slumped',
   );
+  const prefill = noteBody(edited);
   const evening = makeEntry(
     '2026-10-07',
     { writing: 2, tech: 0, clay: 0, photos: 0, posts: 0 },
     false,
   );
-  const updated = mergePrivateNote(evening, '', edited);
+  const updated = mergePrivateNote(evening, prefill, prefill, edited);
   assert.match(updated, /\nwriting: 2\n/);
   assert.ok(updated.endsWith('\n\nthrew two bowls\n\nboth slumped\n'));
   assert.equal(noteBody(updated), 'threw two bowls\n\nboth slumped');
+});
+
+test('an unchanged prefill keeps a note edited by hand after the page loaded', () => {
+  const morning = makeEntry(
+    '2026-10-08',
+    { writing: 1, tech: 0, clay: 0, photos: 0, posts: 0 },
+    false,
+  );
+  const saved = mergePrivateNote(morning, 'threw two bowls', '', null);
+  const prefill = noteBody(saved);
+  const handEdited = saved.replace('threw two bowls', 'threw two bowls\n\nboth slumped');
+  const evening = makeEntry(
+    '2026-10-08',
+    { writing: 2, tech: 0, clay: 0, photos: 0, posts: 0 },
+    false,
+  );
+  assert.equal(
+    noteBody(mergePrivateNote(evening, prefill, prefill, handEdited)),
+    'threw two bowls\n\nboth slumped',
+  );
+  assert.equal(
+    noteBody(mergePrivateNote(evening, `${prefill} `, prefill, handEdited)),
+    'threw two bowls\n\nboth slumped',
+  );
+  assert.equal(noteBody(mergePrivateNote(evening, '', prefill, handEdited)), 'threw two bowls\n\nboth slumped');
+  assert.equal(noteBody(mergePrivateNote(evening, 'glazed three', prefill, handEdited)), 'glazed three');
 });
 
 test('commit messages name the day and whether it is a correction', () => {

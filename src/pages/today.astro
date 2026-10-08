@@ -46,13 +46,11 @@ const config = {
 
       <label class="noteline">
         <span class="row-label">One line, private</span>
-        <input
-          type="text"
+        <textarea
           data-note
+          rows="1"
           autocomplete="off"
-          enterkeyhint="done"
-          placeholder="Goes to the life-log, never the site"
-        />
+          placeholder="Goes to the life-log, never the site"></textarea>
       </label>
 
       <button type="submit" class="button save" data-save>Save</button>
@@ -275,7 +273,7 @@ const config = {
     gap: 0.35rem;
     margin-bottom: 1rem;
   }
-  .noteline input,
+  .noteline textarea,
   .tokenform input {
     font: inherit;
     font-size: 1rem;
@@ -287,10 +285,23 @@ const config = {
     color: var(--ink);
     width: 100%;
   }
-  .noteline input:focus,
+  .noteline textarea {
+    display: block;
+    line-height: 1.45;
+    resize: none;
+    overflow: hidden;
+  }
+  .noteline textarea:focus,
   .tokenform input:focus {
     outline: 2px solid var(--blue);
     outline-offset: 1px;
+  }
+  .rows :global(.tap:disabled),
+  .flagline input:disabled,
+  .noteline textarea:disabled,
+  .gap .button:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
   .save {
     width: 100%;

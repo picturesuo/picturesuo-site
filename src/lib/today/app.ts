@@ -89,6 +89,9 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
   // True once the form holds something the user put there and has not saved.
   // A live refresh then leaves the form alone and only repaints the top.
   let dirty = false;
+  // The note the page put in the field, so an unchanged field means "keep
+  // whatever is in the private repo now" rather than "write this back".
+  let shown = '';
   let saving = false;
 
   const els = {
@@ -102,7 +105,7 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     form: q<HTMLFormElement>(root, '[data-form]'),
     rows: q<HTMLElement>(root, '[data-rows]'),
     flag: q<HTMLInputElement>(root, '[data-flag]'),
-    note: q<HTMLInputElement>(root, '[data-note]'),
+    note: q<HTMLTextAreaElement>(root, '[data-note]'),
     save: q<HTMLButtonElement>(root, '[data-save]'),
     status: q<HTMLElement>(root, '[data-status]'),
     setup: q<HTMLDetailsElement>(root, '[data-setup]'),
@@ -164,7 +167,12 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     // as a zero day, deliberately. What never happens is the page writing a
     // zero row for a day you skipped.
     const zero = isBlank({ ...counts, flag }) ? ' as a zero day' : '';
-    els.save.disabled = saving;
+    for (const c of els.form.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement>(
+      'button, input, textarea',
+    )) {
+      c.disabled = saving;
+    }
+    els.gapButton.disabled = saving;
     els.save.textContent = saving
       ? 'Saving…'
       : existing
@@ -249,7 +257,9 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     for (const t of TRACKS) counts[t] = existing ? existing[t] : 0;
     flag = existing ? existing.flag : false;
     els.flag.checked = flag;
+    shown = '';
     els.note.value = '';
+    fitNote();
     for (const t of TRACKS) paintRow(t);
     if (!keepStatus) els.status.innerHTML = '';
     paintDay();
@@ -266,8 +276,9 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     try {
       const f = await getFile(fetchFn, stored.token, config.private, privateNotePath(date));
       if (seq !== noteSeq || day !== date || dirty || !f) return;
-      const body = noteBody(f.text);
-      if (!/[\r\n]/.test(body)) els.note.value = body;
+      shown = noteBody(f.text);
+      els.note.value = shown;
+      fitNote();
     } catch {
       /* unreadable now: an untouched field still keeps the saved line on update */
     }
@@ -296,7 +307,13 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
   });
   els.note.addEventListener('input', () => {
     dirty = true;
+    fitNote();
   });
+
+  function fitNote(): void {
+    els.note.style.height = 'auto';
+    els.note.style.height = `${els.note.scrollHeight}px`;
+  }
 
   // ---- live data ---------------------------------------------------------
   async function refresh(): Promise<void> {
@@ -403,8 +420,8 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
       results.push({ label: 'Counts', ok: false, text: describe(e) });
     }
 
-    // 2. The whole record, note included, to the private repo. A blank
-    // field keeps whatever line is already there.
+    // 2. The whole record, note included, to the private repo. A field left
+    // as the page showed it keeps whatever line is in the file now.
     try {
       const path = privateNotePath(entry.date);
       const r = await updateFile({
@@ -413,7 +430,7 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
         repo: priv,
         path,
         message,
-        transform: (current) => mergePrivateNote(entry, els.note.value, current),
+        transform: (current) => mergePrivateNote(entry, els.note.value, shown, current),
       });
       results.push(
         r.status === 'committed'
@@ -433,6 +450,7 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     paintStatus(results, failed);
     if (!failed) {
       dirty = false;
+      shown = els.note.value.trim();
       const p = document.createElement('p');
       p.className = 'muted';
       p.innerHTML = `Logged. The <a href="${config.progressHref}">calendar</a> shows it after the next deploy, a couple of minutes from now.`;
