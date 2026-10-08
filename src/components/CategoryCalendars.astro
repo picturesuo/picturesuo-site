@@ -1,0 +1,489 @@
+---
+/**
+ * Five GitHub-style calendars, one per category, each in its own colour.
+ *
+ * Weeks run left to right, days top to bottom from Monday. A square's shade is
+ * that category's count for the day, 0 to 4. Three kinds of empty are kept
+ * apart: a day with no entry is plain paper, a day that was saved with a zero
+ * carries a small dot (a recorded zero is a statement, not a gap), and a day
+ * that has not happened yet is faded out. An anti-goal is a slash, never a
+ * colour, so it survives every calendar.
+ *
+ * Every square is a real button: tap or focus it and the line beneath the grid
+ * reads the date and count. One tab stop per calendar; arrow keys move
+ * between days, Home and End jump to the first and last.
+ *
+ * The grid itself is laid out at build time. Which day is today is the
+ * viewer's own, so the script below fades the days that have not come, writes
+ * the stats and the readout, and picks the tab-stop square once it knows the
+ * local date.
+ *
+ * The model lives in src/lib/categoryCalendar.ts and has its own tests.
+ */
+import log from '../data/log.json';
+import {
+  CATEGORIES,
+  MAX_COUNT,
+  RAMP,
+  buildCategoryGrid,
+  cellBackground,
+  normalizeLog,
+} from '../lib/categoryCalendar.ts';
+
+interface Props {
+  start?: string;
+  weeks?: number;
+}
+const { start = '2026-09-01', weeks = 30 } = Astro.props;
+
+const entries = normalizeLog(log);
+const grids = CATEGORIES.map((c) => buildCategoryGrid(entries, c, { start, weeks }));
+
+const WEEKDAYS = ['Mon', '', 'Wed', '', 'Fri', '', ''];
+---
+
+<div class="catcals" style={`--weeks:${weeks}`}>
+  {
+    grids.map((g) => {
+      const id = `cat-${g.category.key}`;
+      return (
+        <section
+          class="catcal"
+          aria-labelledby={id}
+          data-cat={g.category.key}
+          data-start={start}
+          data-weeks={g.weeks}
+        >
+          <header class="cathead">
+            <h3 id={id}>
+              <i class="dot" style={`background:${g.category.color}`} />
+              {g.category.name}
+            </h3>
+            <p class="catstats" />
+          </header>
+
+          <div class="catscroll" aria-label={`${g.category.name} calendar, scrolls sideways`}>
+            <div class="catmonths" aria-hidden="true">
+              {g.months.map((m) => (
+                <span style={`grid-column:${m.week + 1}`}>{m.label}</span>
+              ))}
+            </div>
+            <div class="catbody">
+              <div class="catdays" aria-hidden="true">
+                {WEEKDAYS.map((w) => (
+                  <span>{w}</span>
+                ))}
+              </div>
+              <div
+                class="catgrid"
+                role="group"
+                aria-label={`${g.category.name}, one square per day. Use arrow keys to move between days.`}
+              >
+                {g.days.map((d, i) => (
+                  <button
+                    type="button"
+                    class:list={[
+                      'day',
+                      {
+                        before: d.before,
+                        zero: d.recorded && d.count === 0,
+                        flag: d.flag,
+                      },
+                    ]}
+                    tabindex={-1}
+                    data-i={i}
+                    data-date={d.date}
+                    style={
+                      cellBackground(d, g.category)
+                        ? `background:${cellBackground(d, g.category)}`
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <p class="catout" aria-live="polite" />
+
+          <p class="catlegend">
+            <span>
+              <i class="sw" />
+              no entry
+            </span>
+            <span>
+              <i class="sw zero" />
+              recorded 0
+            </span>
+            <span class="ramp">
+              {RAMP.slice(1).map((p, i) => (
+                <i
+                  class="sw"
+                  style={`background:color-mix(in srgb, ${g.category.color} ${p}%, var(--paper-deep))`}
+                  title={`${i + 1} of ${MAX_COUNT}`}
+                />
+              ))}
+              1 to {MAX_COUNT}
+            </span>
+            <span>
+              <i class="sw slash" />
+              anti-goal
+            </span>
+            <span>
+              <i class="sw future" />
+              not yet
+            </span>
+          </p>
+        </section>
+      );
+    })
+  }
+</div>
+
+<script>
+  import log from '../data/log.json';
+  import {
+    CATEGORIES,
+    buildCategoryGrid,
+    describeDay,
+    homeIndex,
+    isFuture,
+    localToday,
+    normalizeLog,
+    scoreGrid,
+  } from '../lib/categoryCalendar.ts';
+
+  const today = localToday();
+  const entries = normalizeLog(log);
+
+  document.querySelectorAll<HTMLElement>('.catcal').forEach((cal) => {
+    const category = CATEGORIES.find((c) => c.key === cal.dataset.cat);
+    if (!category) return;
+    const grid = buildCategoryGrid(entries, category, {
+      start: cal.dataset.start || '',
+      weeks: Number(cal.dataset.weeks),
+    });
+    const cells = Array.from(cal.querySelectorAll<HTMLButtonElement>('.day'));
+    const out = cal.querySelector<HTMLElement>('.catout');
+    const stats = cal.querySelector<HTMLElement>('.catstats');
+
+    // The same layout the build rendered, now scored against the local date.
+    cells.forEach((cell, i) => {
+      const d = grid.days[i];
+      cell.classList.toggle('future', isFuture(d, today));
+      cell.setAttribute('aria-label', describeDay(d, category, today));
+    });
+    const home = cells[homeIndex(grid.days, today)];
+    if (home) {
+      home.tabIndex = 0;
+      if (out) out.textContent = home.getAttribute('aria-label') || '';
+    }
+    if (stats) {
+      const s = scoreGrid(grid.days, today);
+      stats.innerHTML = s.recordedDays
+        ? `<span><b>${s.activeDays}</b> of <b>${s.recordedDays}</b> recorded days</span>` +
+          `<span>streak <b>${s.streak}</b></span><span>longest <b>${s.longest}</b></span>` +
+          (s.flagged ? `<span><b>${s.flagged}</b> slashed</span>` : '')
+        : '<span>nothing recorded yet</span>';
+    }
+
+    // Roving focus: one tab stop per calendar, arrows walk the days.
+    function show(cell: HTMLButtonElement) {
+      cells.forEach((c) => {
+        c.tabIndex = c === cell ? 0 : -1;
+        c.classList.toggle('sel', c === cell);
+      });
+      if (out) out.textContent = cell.getAttribute('aria-label') || '';
+    }
+
+    function move(from: HTMLButtonElement, by: number) {
+      const i = Number(from.dataset.i || 0) + by;
+      const next = cells[i];
+      if (!next) return;
+      next.focus();
+      next.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+
+    cal.addEventListener('focusin', (e) => {
+      const t = e.target as HTMLElement;
+      if (t.classList.contains('day')) show(t as HTMLButtonElement);
+    });
+    cal.addEventListener('click', (e) => {
+      const t = (e.target as HTMLElement).closest<HTMLButtonElement>('.day');
+      if (t) show(t);
+    });
+    cal.addEventListener('keydown', (e) => {
+      const t = e.target as HTMLButtonElement;
+      if (!t.classList.contains('day')) return;
+      const step: Record<string, number> = {
+        ArrowDown: 1,
+        ArrowUp: -1,
+        ArrowRight: 7,
+        ArrowLeft: -7,
+      };
+      if (e.key in step) {
+        e.preventDefault();
+        move(t, step[e.key]);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        cells[0]?.focus();
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        cells[cells.length - 1]?.focus();
+      }
+    });
+
+    // Open on this week when the grid is wider than the screen: scroll the
+    // tab-stop square (the latest recorded day, or today) to the right edge.
+    const scroller = cal.querySelector<HTMLElement>('.catscroll');
+    if (scroller && home && scroller.scrollWidth > scroller.clientWidth) {
+      const pad = parseFloat(getComputedStyle(scroller).paddingRight) || 0;
+      scroller.scrollLeft = home.offsetLeft + home.offsetWidth + pad - scroller.clientWidth + 16;
+    }
+  });
+</script>
+
+<style>
+  .catcals {
+    display: grid;
+    gap: 1rem;
+    margin: 1.5rem 0;
+    --cell: 12px;
+    --gap: 3px;
+    --daycol: 2rem;
+  }
+  .catcal {
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 4px;
+    padding: 1rem;
+    min-width: 0;
+  }
+  .cathead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.3rem 1rem;
+    margin-bottom: 0.75rem;
+  }
+  .cathead h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .dot {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 2px;
+    flex: none;
+    display: inline-block;
+  }
+  .catstats {
+    margin: 0;
+    display: flex;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .catstats b {
+    color: var(--ink);
+    font-weight: 700;
+  }
+
+  /* The scroll container is the only thing that may scroll sideways, and the
+     box a square measures its offsetLeft from. */
+  .catscroll {
+    position: relative;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 0.35rem;
+    scrollbar-width: thin;
+  }
+  .catmonths,
+  .catgrid {
+    display: grid;
+    grid-template-columns: repeat(var(--weeks), minmax(var(--cell), 1fr));
+    gap: var(--gap);
+    min-width: calc(var(--weeks) * (var(--cell) + var(--gap)));
+  }
+  .catmonths {
+    margin-left: var(--daycol);
+    /* Line up with the columns even when the row is wider than the box. */
+    width: calc(100% - var(--daycol));
+    font-size: 0.68rem;
+    color: var(--muted);
+    line-height: 1;
+    margin-bottom: 0.35rem;
+    grid-auto-rows: 1em;
+  }
+  .catmonths span {
+    grid-row: 1;
+    white-space: nowrap;
+  }
+  .catbody {
+    display: flex;
+  }
+  .catdays {
+    flex: none;
+    width: var(--daycol);
+    /* Stay put while the weeks scroll underneath. */
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: linear-gradient(90deg, #faf9f6 80%, rgba(250, 249, 246, 0));
+    display: grid;
+    grid-template-rows: repeat(7, minmax(var(--cell), 1fr));
+    gap: var(--gap);
+    font-size: 0.68rem;
+    color: var(--muted);
+    line-height: 1;
+  }
+  .catdays span {
+    display: flex;
+    align-items: center;
+  }
+  .catgrid {
+    flex: 1 1 auto;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(7, minmax(var(--cell), 1fr));
+  }
+  .day {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font: inherit;
+    cursor: pointer;
+    aspect-ratio: 1;
+    width: 100%;
+    min-width: var(--cell);
+    border-radius: 2px;
+    /* paper-deep alone almost vanishes against the page; lift it a touch so
+       an empty grid still reads as a grid. Same recipe as the main calendar. */
+    background: color-mix(in srgb, var(--paper-deep) 74%, var(--line));
+    box-shadow: inset 0 0 0 1px rgba(23, 23, 20, 0.04);
+    position: relative;
+    display: block;
+  }
+  .day.before {
+    opacity: 0.6;
+  }
+  .day.future {
+    opacity: 0.35;
+    box-shadow: none;
+    cursor: default;
+  }
+  /* A recorded zero: a dot at the centre, so "I did none" is visibly a mark. */
+  .day.zero::before,
+  .sw.zero::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 30%;
+    height: 30%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--ink);
+    opacity: 0.45;
+  }
+  .day.flag::after,
+  .sw.slash::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      transparent 38%,
+      var(--ink) 38%,
+      var(--ink) 62%,
+      transparent 62%
+    );
+    opacity: 0.72;
+  }
+  .day:hover {
+    box-shadow: inset 0 0 0 1px rgba(23, 23, 20, 0.35);
+  }
+  .day:focus-visible,
+  .day.sel:focus {
+    outline: 2px solid var(--blue);
+    outline-offset: 1px;
+    z-index: 1;
+  }
+  .day.sel {
+    box-shadow: inset 0 0 0 1px var(--ink);
+  }
+
+  .catout {
+    margin: 0.6rem 0 0;
+    min-height: 1.3em;
+    font-size: 0.85rem;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .catlegend {
+    margin: 0.5rem 0 0;
+    display: flex;
+    gap: 0.35rem 0.85rem;
+    flex-wrap: wrap;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .catlegend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .catlegend .ramp {
+    gap: 2px;
+  }
+  .catlegend .ramp i:last-of-type {
+    margin-right: 0.3rem;
+  }
+  .sw {
+    width: 0.72rem;
+    height: 0.72rem;
+    border-radius: 2px;
+    display: inline-block;
+    flex: none;
+    position: relative;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--paper-deep) 74%, var(--line));
+  }
+  .sw.future {
+    opacity: 0.35;
+  }
+
+  @media (max-width: 600px) {
+    .catcal {
+      padding: 0.8rem;
+    }
+    .cathead {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    /* Say so when the grid will scroll: on a phone it always does. */
+    .catscroll::after {
+      content: 'Scrolls sideways';
+      display: block;
+      margin-top: 0.4rem;
+      font-size: 0.7rem;
+      color: var(--muted);
+      position: sticky;
+      left: 0;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .catscroll {
+      scroll-behavior: smooth;
+    }
+  }
+</style>

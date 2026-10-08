@@ -1,7 +1,8 @@
 ---
 import SiteLayout from '../layouts/SiteLayout.astro';
 import ActivityCalendar from '../components/ActivityCalendar.astro';
-import { currentCycle, progressItems, progressLegend } from '../data/progress';
+import CategoryCalendars from '../components/CategoryCalendars.astro';
+import { currentCycle, progressItems } from '../data/progress';
 const format = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
@@ -55,6 +56,16 @@ const format = new Intl.DateTimeFormat('en-US', {
         Colours describe where the time went, not whether the day was good. The daily card behind
         this stays private; only these counts reach the page.
       </p>
+    </section>
+    <section class="section rule">
+      <div class="section-head">
+        <div class="section-label">By category</div><p class="section-intro muted">
+          The same days, one calendar per category, each in its own colour. Darker is more, zero to
+          four. A dot is a day I recorded and did none of that thing; plain paper is a day with no
+          entry at all. Tap any square to read it.
+        </p>
+      </div>
+      <CategoryCalendars start="2026-09-01" weeks={30} />
     </section>
     <section class="section rule">
       <div class="section-head">
