@@ -28,8 +28,8 @@ import {
   streak,
   total,
   upsert,
-} from './core';
-import { GitHubError, checkAccess, getFile, updateFile, type Repo } from './github';
+} from './core.ts';
+import { GitHubError, checkAccess, getFile, updateFile, type Repo } from './github.ts';
 
 const STORAGE_KEY = 'picturesuo.today';
 const LOG_PATH = 'src/data/log.json';

@@ -222,9 +222,7 @@ test('an unchanged prefill keeps a note edited by hand after the page loaded', (
   assert.equal(noteBody(mergePrivateNote(evening, 'glazed three', prefill, handEdited)), 'glazed three');
 });
 
-test('a count tapped before the note arrives does not count as touching the note', () => {
-  // The page starts with an empty field and nothing shown; a tap changes
-  // neither, so the prefill may still land and must then be the baseline.
+test('a field is untouched while it holds what the page put there', () => {
   assert.equal(noteUntouched('', ''), true);
   const prefill = 'threw two bowls\n\nboth slumped';
   assert.equal(noteUntouched(prefill, prefill), true);
