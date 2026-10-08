@@ -19,6 +19,7 @@ import {
   makeEntry,
   mergePrivateNote,
   noteBody,
+  noteUntouched,
   parseLog,
   privateNotePath,
   recentDays,
@@ -275,7 +276,7 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     const seq = ++noteSeq;
     try {
       const f = await getFile(fetchFn, stored.token, config.private, privateNotePath(date));
-      if (seq !== noteSeq || day !== date || dirty || !f) return;
+      if (seq !== noteSeq || day !== date || !f || !noteUntouched(els.note.value, shown)) return;
       shown = noteBody(f.text);
       els.note.value = shown;
       fitNote();
@@ -422,6 +423,7 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
 
     // 2. The whole record, note included, to the private repo. A field left
     // as the page showed it keeps whatever line is in the file now.
+    let noteText = '';
     try {
       const path = privateNotePath(entry.date);
       const r = await updateFile({
@@ -430,7 +432,10 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
         repo: priv,
         path,
         message,
-        transform: (current) => mergePrivateNote(entry, els.note.value, shown, current),
+        transform: (current) => {
+          noteText = mergePrivateNote(entry, els.note.value, shown, current);
+          return noteText;
+        },
       });
       results.push(
         r.status === 'committed'
@@ -450,7 +455,9 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     paintStatus(results, failed);
     if (!failed) {
       dirty = false;
-      shown = els.note.value.trim();
+      shown = noteBody(noteText);
+      els.note.value = shown;
+      fitNote();
       const p = document.createElement('p');
       p.className = 'muted';
       p.innerHTML = `Logged. The <a href="${config.progressHref}">calendar</a> shows it after the next deploy, a couple of minutes from now.`;

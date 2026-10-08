@@ -7,6 +7,7 @@ import {
   makeEntry,
   mergePrivateNote,
   noteBody,
+  noteUntouched,
   parseLog,
   privateNote,
   privateNotePath,
@@ -219,6 +220,22 @@ test('an unchanged prefill keeps a note edited by hand after the page loaded', (
   );
   assert.equal(noteBody(mergePrivateNote(evening, '', prefill, handEdited)), 'threw two bowls\n\nboth slumped');
   assert.equal(noteBody(mergePrivateNote(evening, 'glazed three', prefill, handEdited)), 'glazed three');
+});
+
+test('a count tapped before the note arrives does not count as touching the note', () => {
+  // The page starts with an empty field and nothing shown; a tap changes
+  // neither, so the prefill may still land and must then be the baseline.
+  assert.equal(noteUntouched('', ''), true);
+  const prefill = 'threw two bowls\n\nboth slumped';
+  assert.equal(noteUntouched(prefill, prefill), true);
+  assert.equal(noteUntouched(`${prefill}\n`, prefill), true);
+  assert.equal(noteUntouched('glazed three', ''), false);
+  assert.equal(noteUntouched('', prefill), false);
+  const e = makeEntry('2026-10-08', { writing: 2, tech: 0, clay: 0, photos: 0, posts: 0 }, false);
+  const saved = privateNote(e, prefill);
+  assert.equal(noteBody(mergePrivateNote(e, prefill, prefill, saved)), prefill);
+  assert.equal(noteBody(mergePrivateNote(e, '', '', saved)), prefill);
+  assert.equal(noteBody(mergePrivateNote(e, 'glazed three', '', saved)), 'glazed three');
 });
 
 test('commit messages name the day and whether it is a correction', () => {

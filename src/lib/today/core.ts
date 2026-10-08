@@ -196,9 +196,13 @@ export function mergePrivateNote(
   shown: string,
   current: string | null,
 ): string {
-  const typed = field.trim();
-  const changed = typed === shown ? '' : typed;
-  return privateNote(entry, changed || (current ? noteBody(current) : ''));
+  const typed = noteUntouched(field, shown) ? '' : field.trim();
+  return privateNote(entry, typed || (current ? noteBody(current) : ''));
+}
+
+/** True while the field still holds what the page put there (or nothing). */
+export function noteUntouched(field: string, shown: string): boolean {
+  return field.trim() === shown;
 }
 
 export function commitMessage(date: string, replacing: boolean): string {
