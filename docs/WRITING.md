@@ -6,7 +6,7 @@ Three cadences, three shapes. Nothing here publishes on its own.
 
 The 3×5 card. Front is what you planned, back is what actually happened. It
 stays private: only five counts and an anti-goal flag ever reach the public
-calendar at `/progress/`, through `counts:export` in the life-log repo. The card
+calendars at `/progress/`, through `counts:export` in the life-log repo. The card
 text itself never leaves that repository.
 
 ## 2. Weekly — the week note
