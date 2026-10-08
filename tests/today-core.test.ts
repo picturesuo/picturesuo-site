@@ -173,6 +173,27 @@ test('updating the counts with a blank field keeps the saved line', () => {
   assert.match(mergePrivateNote(evening, '', null), /_No note\._\n$/);
 });
 
+test('a blank field keeps a hand-edited multi-line note verbatim', () => {
+  const morning = makeEntry(
+    '2026-10-07',
+    { writing: 1, tech: 0, clay: 0, photos: 0, posts: 0 },
+    false,
+  );
+  const edited = mergePrivateNote(morning, 'threw two bowls', null).replace(
+    'threw two bowls',
+    'threw two bowls\n\nboth slumped',
+  );
+  const evening = makeEntry(
+    '2026-10-07',
+    { writing: 2, tech: 0, clay: 0, photos: 0, posts: 0 },
+    false,
+  );
+  const updated = mergePrivateNote(evening, '', edited);
+  assert.match(updated, /\nwriting: 2\n/);
+  assert.ok(updated.endsWith('\n\nthrew two bowls\n\nboth slumped\n'));
+  assert.equal(noteBody(updated), 'threw two bowls\n\nboth slumped');
+});
+
 test('commit messages name the day and whether it is a correction', () => {
   assert.equal(commitMessage('2026-10-06', false), 'Log 2026-10-06');
   assert.equal(commitMessage('2026-10-06', true), 'Update 2026-10-06');

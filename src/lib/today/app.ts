@@ -266,7 +266,8 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     try {
       const f = await getFile(fetchFn, stored.token, config.private, privateNotePath(date));
       if (seq !== noteSeq || day !== date || dirty || !f) return;
-      els.note.value = noteBody(f.text);
+      const body = noteBody(f.text);
+      if (!/[\r\n]/.test(body)) els.note.value = body;
     } catch {
       /* unreadable now: an untouched field still keeps the saved line on update */
     }
