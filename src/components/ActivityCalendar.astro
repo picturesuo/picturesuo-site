@@ -10,14 +10,24 @@
  * Anti-goals are drawn as a slash, never a colour — coral already means clay,
  * and a broken rule should survive every filter instead of hiding in a week
  * that otherwise looks busy.
+ *
+ * A day counts as logged when an entry exists for it, whatever the counts say.
+ * A day saved with five zeros is a statement and gets a dot; a day with no
+ * entry at all stays plain paper. The two must never look the same.
  */
 import log from '../data/log.json';
 
 interface Props {
   start?: string;
   weeks?: number;
+  /** ISO date treated as today; defaults to the build date. */
+  today?: string;
 }
-const { start = '2026-09-01', weeks = 30 } = Astro.props;
+const {
+  start = '2026-09-01',
+  weeks = 30,
+  today = new Date().toISOString().slice(0, 10),
+} = Astro.props;
 
 const TRACKS = [
   { k: 'writing', n: 'Writing', c: 'var(--green)' },
@@ -49,10 +59,17 @@ const days = Array.from({ length: weeks * 7 }, (_, i) => {
     vals[t.k] = v;
     total += v;
   }
-  return { date, before: date < start, vals, total, flag: Boolean(e && e.flag) };
+  return {
+    date,
+    before: date < start,
+    recorded: Boolean(e),
+    vals,
+    total,
+    flag: Boolean(e && e.flag),
+  };
 });
 
-const logged = days.filter((d) => !d.before && d.total > 0).length;
+const logged = days.filter((d) => !d.before && d.date <= today && d.recorded).length;
 const fmt = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
@@ -62,7 +79,7 @@ const fmt = new Intl.DateTimeFormat('en-US', {
 const startLabel = fmt.format(startDate);
 ---
 
-<div class="cal" data-start={start}>
+<div class="cal" data-start={start} data-today={today}>
   <div class="chips" role="group" aria-label="Filter the calendar by track">
     <button type="button" class="chip on" data-k="all" aria-pressed="true">
       <i class="dot all"></i>All together
@@ -70,7 +87,7 @@ const startLabel = fmt.format(startDate);
     {
       TRACKS.map((t) => (
         <button type="button" class="chip" data-k={t.k} aria-pressed="false">
-          <i class="dot" style={`background:${t.c}`}></i>
+          <i class="dot" style={`background:${t.c}`} />
           {t.n}
         </button>
       ))
@@ -82,9 +99,13 @@ const startLabel = fmt.format(startDate);
       {
         days.map((d) => (
           <i
-            class:list={['cell', { flag: d.flag, before: d.before }]}
+            class:list={[
+              'cell',
+              { flag: d.flag, before: d.before, zero: d.recorded && d.total === 0 },
+            ]}
             data-date={d.date}
             data-total={d.total}
+            data-recorded={d.recorded ? '1' : '0'}
             data-vals={JSON.stringify(d.vals)}
             title={
               (d.total
@@ -92,7 +113,7 @@ const startLabel = fmt.format(startDate);
                   TRACKS.filter((t) => d.vals[t.k])
                     .map((t) => `${t.n.toLowerCase()} ${d.vals[t.k]}`)
                     .join(' · ')
-                : `${fmt.format(new Date(`${d.date}T00:00:00Z`))} — nothing logged`) +
+                : `${fmt.format(new Date(`${d.date}T00:00:00Z`))} — ${d.recorded ? 'nothing done, recorded' : 'no entry'}`) +
               (d.flag ? ' · anti-goal' : '')
             }
           >
@@ -100,7 +121,7 @@ const startLabel = fmt.format(startDate);
               TRACKS.filter((t) => d.vals[t.k]).map((t) => (
                 <span
                   style={`height:${((d.vals[t.k] / d.total) * Math.min(1, d.total / 11) * 100).toFixed(2)}%;background:${t.c}`}
-                ></span>
+                />
               ))}
           </i>
         ))
@@ -113,11 +134,12 @@ const startLabel = fmt.format(startDate);
       {
         TRACKS.map((t) => (
           <span>
-            <i class="sw" style={`background:${t.c}`}></i>
+            <i class="sw" style={`background:${t.c}`} />
             {t.n}
           </span>
         ))
       }
+      <span><i class="sw zero"></i>recorded, nothing done</span>
       <span><i class="sw slash"></i>anti-goal</span>
     </div>
     <div class="stats">
@@ -146,6 +168,7 @@ const startLabel = fmt.format(startDate);
 
   document.querySelectorAll<HTMLElement>('.cal').forEach((cal) => {
     const start = cal.dataset.start || '';
+    const today = cal.dataset.today || '9999-12-31';
     const cells = Array.from(cal.querySelectorAll<HTMLElement>('.cell'));
     const chips = Array.from(cal.querySelectorAll<HTMLButtonElement>('.chip'));
     const grid = cal.querySelector<HTMLElement>('.grid');
@@ -159,17 +182,25 @@ const startLabel = fmt.format(startDate);
       vals: JSON.parse(c.dataset.vals || '{}') as Record<string, number>,
       flag: c.classList.contains('flag'),
       before: c.classList.contains('before'),
+      recorded: c.dataset.recorded === '1',
     }));
 
     const label = (d: string) =>
-      new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
-        .format(new Date(`${d}T00:00:00Z`));
+      new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }).format(new Date(`${d}T00:00:00Z`));
 
     function render(mode: string) {
       const track = TRACKS.find((t) => t.k === mode);
       data.forEach((d) => {
         d.el.innerHTML = '';
         d.el.style.background = '';
+        // The dot marks a recorded day whose shown value is zero.
+        const shown = mode === 'all' ? d.total : d.vals[mode] || 0;
+        d.el.classList.toggle('zero', d.recorded && shown === 0);
         if (mode === 'all') {
           if (d.total > 0) {
             const fill = Math.min(1, d.total / 11);
@@ -185,17 +216,26 @@ const startLabel = fmt.format(startDate);
           d.el.title =
             `${label(d.date)} — ` +
             (d.total
-              ? TRACKS.filter((t) => d.vals[t.k]).map((t) => `${t.n.toLowerCase()} ${d.vals[t.k]}`).join(' · ')
-              : 'nothing logged') +
+              ? TRACKS.filter((t) => d.vals[t.k])
+                  .map((t) => `${t.n.toLowerCase()} ${d.vals[t.k]}`)
+                  .join(' · ')
+              : d.recorded
+                ? 'nothing done, recorded'
+                : 'no entry') +
             (d.flag ? ' · anti-goal' : '');
         } else if (track) {
           const v = d.vals[mode] || 0;
-          if (v) d.el.style.background = `color-mix(in srgb, ${track.c} ${RAMP[v]}%, var(--paper-deep))`;
-          d.el.title = `${label(d.date)} — ${track.n.toLowerCase()} ${v}` + (d.flag ? ' · anti-goal' : '');
+          if (v)
+            d.el.style.background = `color-mix(in srgb, ${track.c} ${RAMP[v]}%, var(--paper-deep))`;
+          d.el.title =
+            `${label(d.date)} — ` +
+            (d.recorded ? `${track.n.toLowerCase()} ${v}` : 'no entry') +
+            (d.flag ? ' · anti-goal' : '');
         }
       });
 
-      if (grid) grid.setAttribute('aria-label', (track ? track.n : 'All tracks') + ' activity calendar');
+      if (grid)
+        grid.setAttribute('aria-label', (track ? track.n : 'All tracks') + ' activity calendar');
 
       if (legend) {
         let html = '';
@@ -209,26 +249,34 @@ const startLabel = fmt.format(startDate);
             html += `<span><i class="sw" style="background:color-mix(in srgb, ${track.c} ${p}%, var(--paper-deep))"></i>${i === 3 ? 'a lot' : ''}</span>`;
           });
         }
+        html += '<span><i class="sw zero"></i>recorded, nothing done</span>';
         html += '<span><i class="sw slash"></i>anti-goal</span>';
         legend.innerHTML = html;
       }
 
       if (stats) {
-        const live = data.filter((d) => !d.before);
-        const active = (d: (typeof data)[number]) => (mode === 'all' ? d.total > 0 : (d.vals[mode] || 0) > 0);
+        // Days that have happened: on or after start, up to and including today.
+        const live = data.filter((d) => !d.before && d.date <= today);
+        const active = (d: (typeof data)[number]) =>
+          mode === 'all' ? d.total > 0 : (d.vals[mode] || 0) > 0;
+        // Logged means an entry exists; a streak means the shown value was
+        // above zero. A recorded zero is logged but breaks the streak.
         let run = 0,
           best = 0,
-          count = 0;
+          logged = 0;
         live.forEach((d) => {
+          if (d.recorded) logged++;
           if (active(d)) {
             run++;
-            count++;
             if (run > best) best = run;
-          } else run = 0;
+          } else if (d.recorded || d.date !== today) {
+            // Today without an entry is still open, so it does not end a streak.
+            run = 0;
+          }
         });
         const flags = live.filter((d) => d.flag).length;
-        stats.innerHTML = count
-          ? `<span><b>${count}</b> days logged</span><span>streak <b>${run}</b></span>` +
+        stats.innerHTML = logged
+          ? `<span><b>${logged}</b> days logged</span><span>streak <b>${run}</b></span>` +
             `<span>longest <b>${best}</b></span><span><b>${flags}</b> slashed</span>`
           : `<span>starts ${label(start)}</span>`;
       }
@@ -335,6 +383,25 @@ const startLabel = fmt.format(startDate);
   .cell span {
     display: block;
     width: 100%;
+  }
+  /* A recorded zero: a dot in the middle, so "nothing done" is still a mark. */
+  .cell.zero::before,
+  .sw.zero::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 30%;
+    height: 30%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--ink);
+    opacity: 0.45;
+    z-index: 1;
+  }
+  .sw.zero {
+    position: relative;
+    background: color-mix(in srgb, var(--paper-deep) 74%, var(--line));
   }
   .cell.flag::after {
     content: '';
