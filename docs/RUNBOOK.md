@@ -31,9 +31,9 @@ Then the morning is: open the page, tap, Save. Counts go to
 `src/data/log.json` in this repo (one commit, that one file); the counts plus
 the line go to `checkins/YYYY-MM-DD.md` in the private repo (one commit, that
 one file). The calendar at `/progress/` picks the day up on the next deploy,
-which the commit itself triggers. A skipped day is never filled in with zeros
-- the Save button stays disabled until something is non-zero or the anti-goal
-box is ticked.
+which the commit itself triggers. A skipped day is never filled in with zeros:
+the page only writes the day you are looking at when you tap Save. Saving five
+zeros on purpose is allowed and records a zero day.
 
 **What the token can and cannot do.** It is stored in the phone browser's
 localStorage for picturesuo.com, in the clear. The site password gates the
@@ -58,7 +58,8 @@ The 8am task (`~/.claude/scheduled-tasks/picturesuo-daily-heartbeat/`) now
 opens the check-in page and says whether yesterday is logged, instead of
 running the card in chat. A second task, `picturesuo-evening-nudge`, pushes
 one reminder at 21:00 if today is still not logged. Both definitions are
-versioned in the private repo under `automation/`.
+versioned in the private repo under `automation/`. Until `/today/` is live the
+8am task checks for the page first and runs the old card ritual instead.
 
 To install the evening one: copy
 `picturesuo-life-log/automation/picturesuo-evening-nudge/` into

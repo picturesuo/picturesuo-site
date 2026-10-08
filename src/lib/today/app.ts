@@ -161,15 +161,16 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
 
   function paintSave(): void {
     const existing = byDate(log).get(day);
-    const blank = isBlank({ ...counts, flag });
-    els.save.disabled = saving || blank;
+    // An all-zero day is still a day you showed up to record: it is logged
+    // as a zero day, deliberately. What never happens is the page writing a
+    // zero row for a day you skipped.
+    const zero = isBlank({ ...counts, flag }) ? ' as a zero day' : '';
+    els.save.disabled = saving;
     els.save.textContent = saving
       ? 'Saving…'
-      : blank
-        ? 'Nothing to record'
-        : existing
-          ? `Update ${formatDate(day)}`
-          : `Save ${formatDate(day)}`;
+      : existing
+        ? `Update ${formatDate(day)}${zero}`
+        : `Save ${formatDate(day)}${zero}`;
   }
 
   // ---- the top: streak, 14 days, the hole -------------------------------
@@ -323,8 +324,6 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
       els.status.innerHTML = `<p class="bad">${e instanceof Error ? e.message : e}</p>`;
       return;
     }
-    if (isBlank(entry)) return;
-
     saving = true;
     paintSave();
     const branchOf = (r: Repo): Repo => ({ ...r, branch: stored.branch || r.branch });

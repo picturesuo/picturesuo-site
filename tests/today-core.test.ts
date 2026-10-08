@@ -38,7 +38,19 @@ test('shiftDate crosses month and year boundaries', () => {
   assert.equal(shiftDate('2026-03-01', -1), '2026-02-28');
 });
 
-test('a blank day is never recorded', () => {
+test('an explicit all-zero day is recorded and counts as logged', () => {
+  const zero = makeEntry(
+    '2026-10-07',
+    { writing: 0, tech: 0, clay: 0, photos: 0, posts: 0 },
+    false,
+  );
+  const log = upsert([day('2026-10-06')], zero);
+  assert.equal(log.length, 2);
+  assert.equal(streak(log, '2026-10-07'), 2);
+  assert.equal(recentDays(log, '2026-10-07', 2)[1].entry, zero);
+});
+
+test('isBlank tells an all-zero, unflagged day from one with something in it', () => {
   assert.equal(isBlank(day('2026-10-06', 0)), true);
   assert.equal(isBlank({ ...day('2026-10-06', 0), flag: true }), false);
   assert.equal(isBlank(day('2026-10-06', 1)), false);

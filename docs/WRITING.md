@@ -11,7 +11,7 @@ calendar at `/progress/`. The card text itself never leaves the life-log repo.
 The counts get there from the phone: `/today/` is a check-in page, five taps
 and Save, that commits `src/data/log.json` here and the full record (counts
 plus one private line) to the life-log. Setup is in `RUNBOOK.md`. A day you
-do not log stays blank; the page cannot write zeros.
+do not log stays blank; the page never writes a day you did not save.
 
 ## 2. Weekly — the week note
 

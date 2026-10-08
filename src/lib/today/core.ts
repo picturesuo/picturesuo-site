@@ -67,7 +67,10 @@ export function total(e: Pick<Entry, Track>): number {
   return TRACKS.reduce((sum, t) => sum + (Number(e[t]) || 0), 0);
 }
 
-/** Nothing happened and no rule was broken: there is nothing to record. */
+/**
+ * Five zeros and no broken rule. Saving one on purpose records a zero day;
+ * the page only ever refuses to invent one for a day that was skipped.
+ */
 export function isBlank(e: Pick<Entry, Track | 'flag'>): boolean {
   return total(e) === 0 && !e.flag;
 }
