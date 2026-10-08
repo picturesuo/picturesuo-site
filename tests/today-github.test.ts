@@ -61,7 +61,7 @@ function fakeGitHub(initial: string | null) {
 }
 
 test('base64 round-trips unicode', () => {
-  const s = 'threw two bowls — both slumped · “ok”';
+  const s = 'threw two bowls - both slumped · “ok”';
   assert.equal(decodeBase64(encodeBase64(s)), s);
 });
 

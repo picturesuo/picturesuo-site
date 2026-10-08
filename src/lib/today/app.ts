@@ -17,8 +17,9 @@ import {
   isBlank,
   localDate,
   makeEntry,
+  mergePrivateNote,
+  noteBody,
   parseLog,
-  privateNote,
   privateNotePath,
   recentDays,
   serializeLog,
@@ -42,9 +43,6 @@ export interface Config {
 interface Stored {
   token: string;
   savedAt: string;
-  /** Optional, typed in by hand - the API does not expose it to a browser. */
-  expires?: string;
-  branch?: string;
 }
 
 function readStored(): Stored | null {
@@ -88,6 +86,9 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
   let day = today;
   const counts: Counts = { writing: 0, tech: 0, clay: 0, photos: 0, posts: 0 };
   let flag = false;
+  // True once the form holds something the user put there and has not saved.
+  // A live refresh then leaves the form alone and only repaints the top.
+  let dirty = false;
   let saving = false;
 
   const els = {
@@ -97,7 +98,6 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     gap: q<HTMLElement>(root, '[data-gap]'),
     gapText: q<HTMLElement>(root, '[data-gap-text]'),
     gapButton: q<HTMLButtonElement>(root, '[data-gap-button]'),
-    dayButtons: Array.from(root.querySelectorAll<HTMLButtonElement>('[data-day]')),
     dayLabel: q<HTMLElement>(root, '[data-day-label]'),
     form: q<HTMLFormElement>(root, '[data-form]'),
     rows: q<HTMLElement>(root, '[data-rows]'),
@@ -109,8 +109,6 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     setupState: q<HTMLElement>(root, '[data-setup-state]'),
     tokenForm: q<HTMLFormElement>(root, '[data-token-form]'),
     token: q<HTMLInputElement>(root, '[data-token]'),
-    expires: q<HTMLInputElement>(root, '[data-expires]'),
-    branch: q<HTMLInputElement>(root, '[data-branch]'),
     tokenStatus: q<HTMLElement>(root, '[data-token-status]'),
     forget: q<HTMLButtonElement>(root, '[data-forget]'),
   };
@@ -139,6 +137,7 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
       b.setAttribute('aria-checked', n === 0 ? 'true' : 'false');
       b.addEventListener('click', () => {
         counts[t] = n;
+        dirty = true;
         paintRow(t);
         paintSave();
       });
@@ -184,14 +183,14 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     const days = recentDays(log, today, 14);
     els.strip.innerHTML = '';
     for (const d of days) {
-      const cell = document.createElement('button');
-      cell.type = 'button';
+      const cell = document.createElement('span');
       cell.className = 'cell';
+      cell.setAttribute('role', 'img');
       cell.dataset.date = d.date;
       const e = d.entry;
       const tot = e ? total(e) : 0;
-      // The bands live in their own absolutely positioned box: a percentage
-      // height inside a <button> does not resolve, inside this box it does.
+      // The bands live in their own absolutely positioned box so a
+      // percentage height resolves against the cell.
       const fillBox = document.createElement('em');
       fillBox.className = 'fill';
       if (e && tot > 0) {
@@ -208,83 +207,117 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
       cell.appendChild(fillBox);
       cell.classList.toggle('flag', Boolean(e && e.flag));
       cell.classList.toggle('today', d.date === today);
-      cell.classList.toggle('picked', d.date === day);
       cell.classList.toggle('empty', !e);
       const summary = e
         ? TRACKS.filter((t) => e[t])
             .map((t) => `${TRACK_LABELS[t].toLowerCase()} ${e[t]}`)
-            .join(' · ') || 'anti-goal only'
+            .join(' · ') || (e.flag ? 'anti-goal only' : 'zero day')
         : 'not logged';
-      cell.title = `${formatDate(d.date, { year: 'numeric' })} — ${summary}${e && e.flag ? ' · anti-goal' : ''}`;
+      cell.title = `${formatDate(d.date, { year: 'numeric' })} - ${summary}${e && e.flag ? ' · anti-goal' : ''}`;
       cell.setAttribute('aria-label', cell.title);
       const wd = document.createElement('i');
       wd.textContent = formatDate(d.date, { weekday: 'narrow', month: undefined, day: undefined });
       cell.appendChild(wd);
-      // Only today and yesterday are editable here: the page is for the day
-      // you are in, not for rewriting history from a phone.
-      const editable = d.date === today || d.date === shiftDate(today, -1);
-      cell.disabled = !editable;
-      if (editable) cell.addEventListener('click', () => pickDay(d.date));
       els.strip.appendChild(cell);
     }
 
+    // The one way off today: yesterday, when it is missing, and back again.
     const yesterday = shiftDate(today, -1);
     const missing = !byDate(log).has(yesterday);
-    els.gap.hidden = !missing;
-    if (missing) {
+    const onYesterday = day === yesterday;
+    els.gap.hidden = !missing && !onYesterday;
+    if (onYesterday) {
+      els.gapText.textContent = `Logging yesterday, ${formatDate(yesterday)}.`;
+      els.gapButton.textContent = 'Back to today';
+    } else if (missing) {
       els.gapText.textContent = `Yesterday, ${formatDate(yesterday)}, is not logged.`;
-      els.gapButton.textContent = day === yesterday ? 'Logging yesterday' : 'Log yesterday too';
-      els.gapButton.disabled = day === yesterday;
+      els.gapButton.textContent = 'Log yesterday too';
     }
   }
 
+  function paintDay(): void {
+    els.dayLabel.textContent = `${day === today ? 'Today' : 'Yesterday'} · ${formatDate(day, { year: 'numeric' })}`;
+    paintTop();
+    paintSave();
+  }
+
+  /** Seed the form from the log for `date`, dropping anything unsaved. */
   function pickDay(date: string, keepStatus = false): void {
     day = date;
+    dirty = false;
     const existing = byDate(log).get(day);
     for (const t of TRACKS) counts[t] = existing ? existing[t] : 0;
     flag = existing ? existing.flag : false;
     els.flag.checked = flag;
     els.note.value = '';
     for (const t of TRACKS) paintRow(t);
-    els.dayButtons.forEach((b) => {
-      const on = b.dataset.day === (date === today ? 'today' : 'yesterday');
-      b.classList.toggle('on', on);
-      b.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
-    els.dayLabel.textContent = formatDate(day, { year: 'numeric' });
     if (!keepStatus) els.status.innerHTML = '';
-    paintTop();
-    paintSave();
+    paintDay();
+    if (existing) void loadNote(day);
   }
 
-  els.dayButtons.forEach((b) =>
-    b.addEventListener('click', () =>
-      pickDay(b.dataset.day === 'today' ? today : shiftDate(today, -1)),
-    ),
+  // The private line for an already-logged day, so a correction shows what
+  // it keeps. The token is required: the repo is private.
+  let noteSeq = 0;
+  async function loadNote(date: string): Promise<void> {
+    const stored = readStored();
+    if (!stored) return;
+    const seq = ++noteSeq;
+    try {
+      const f = await getFile(fetchFn, stored.token, config.private, privateNotePath(date));
+      if (seq !== noteSeq || day !== date || dirty || !f) return;
+      els.note.value = noteBody(f.text);
+    } catch {
+      /* unreadable now: an untouched field still keeps the saved line on update */
+    }
+  }
+
+  /**
+   * Re-anchor on the local date and the latest log. Unsaved taps are kept as
+   * long as their day is still today or yesterday; a clean form follows the
+   * date when it rolls over.
+   */
+  function settle(): void {
+    const now = localDate();
+    const rolled = now !== today;
+    today = now;
+    if (dirty && (day === today || day === shiftDate(today, -1))) paintDay();
+    else pickDay(rolled ? today : day, true);
+  }
+
+  els.gapButton.addEventListener('click', () =>
+    pickDay(day === today ? shiftDate(today, -1) : today),
   );
-  els.gapButton.addEventListener('click', () => pickDay(shiftDate(today, -1)));
   els.flag.addEventListener('change', () => {
     flag = els.flag.checked;
+    dirty = true;
     paintSave();
+  });
+  els.note.addEventListener('input', () => {
+    dirty = true;
   });
 
   // ---- live data ---------------------------------------------------------
   async function refresh(): Promise<void> {
     const stored = readStored();
-    const repo = { ...config.public, branch: stored?.branch || config.public.branch };
     try {
-      const f = await getFile(fetchFn, stored?.token ?? null, repo, LOG_PATH);
+      const f = await getFile(fetchFn, stored?.token ?? null, config.public, LOG_PATH);
       if (f) {
         log = parseLog(f.text);
-        els.source.textContent = `live from GitHub · ${repo.branch}`;
+        els.source.textContent = `live from GitHub · ${config.public.branch}`;
       }
     } catch (e) {
       els.source.textContent = `showing the last build (${e instanceof Error ? e.message : e})`;
     }
-    today = localDate();
-    if (day !== today && day !== shiftDate(today, -1)) day = today;
-    pickDay(day);
+    settle();
   }
+
+  // A tab left open across midnight comes back labelled with the right day.
+  const wake = () => {
+    if (document.visibilityState !== 'hidden' && localDate() !== today) void refresh();
+  };
+  document.addEventListener('visibilitychange', wake);
+  window.addEventListener('pageshow', wake);
 
   // ---- saving ------------------------------------------------------------
   type StepResult = { label: string; ok: boolean; text: string; href?: string };
@@ -310,11 +343,17 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
   }
 
   async function save(): Promise<void> {
+    if (localDate() !== today) {
+      settle();
+      els.status.innerHTML = `<p class="bad">It is now ${formatDate(today)}. Check the day above and tap Save again.</p>`;
+      return;
+    }
     const stored = readStored();
     if (!stored) {
       els.setup.open = true;
       els.token.focus();
-      els.status.innerHTML = '<p class="bad">No token on this device yet. Set one up below.</p>';
+      els.status.innerHTML =
+        '<p class="bad" data-nag>No token on this device yet. Set one up below, then tap Save again.</p>';
       return;
     }
     let entry: Entry;
@@ -326,9 +365,8 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     }
     saving = true;
     paintSave();
-    const branchOf = (r: Repo): Repo => ({ ...r, branch: stored.branch || r.branch });
-    const pub = branchOf(config.public);
-    const priv = branchOf(config.private);
+    const pub = config.public;
+    const priv = config.private;
     const replacing = byDate(log).has(entry.date);
     const message = commitMessage(entry.date, replacing);
     const results: StepResult[] = [];
@@ -364,7 +402,8 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
       results.push({ label: 'Counts', ok: false, text: describe(e) });
     }
 
-    // 2. The whole record, note included, to the private repo.
+    // 2. The whole record, note included, to the private repo. A blank
+    // field keeps whatever line is already there.
     try {
       const path = privateNotePath(entry.date);
       const r = await updateFile({
@@ -373,7 +412,7 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
         repo: priv,
         path,
         message,
-        transform: () => privateNote(entry, els.note.value),
+        transform: (current) => mergePrivateNote(entry, els.note.value, current),
       });
       results.push(
         r.status === 'committed'
@@ -392,18 +431,17 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     saving = false;
     paintStatus(results, failed);
     if (!failed) {
+      dirty = false;
       const p = document.createElement('p');
       p.className = 'muted';
       p.innerHTML = `Logged. The <a href="${config.progressHref}">calendar</a> shows it after the next deploy, a couple of minutes from now.`;
       els.status.appendChild(p);
       // Keep the counts on screen - the strip now shows the day filled in -
       // and if yesterday was the hole we just filled, move on to today.
-      paintTop();
       if (day !== today && !byDate(log).has(today)) pickDay(today, true);
-      else paintSave();
+      else paintDay();
     } else {
-      paintTop();
-      paintSave();
+      paintDay();
     }
   }
 
@@ -425,51 +463,37 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
       els.setup.open = true;
       els.setupState.textContent = 'No token on this device';
       els.forget.hidden = true;
-      els.branch.value = config.public.branch;
       return;
     }
     const saved = new Date(stored.savedAt);
-    let text = `Token saved on this device ${isNaN(saved.getTime()) ? '' : saved.toLocaleDateString()}`;
-    if (stored.expires) {
-      const days = Math.ceil((Date.parse(stored.expires) - Date.now()) / 86400000);
-      text += days < 0 ? ` · expired ${-days} days ago` : ` · expires in ${days} days`;
-      els.setupState.classList.toggle('bad', days < 7);
-    }
-    if (stored.branch && stored.branch !== config.public.branch)
-      text += ` · branch ${stored.branch}`;
-    els.setupState.textContent = text;
+    els.setupState.textContent = `Token saved on this device ${isNaN(saved.getTime()) ? '' : saved.toLocaleDateString()}`;
     els.forget.hidden = false;
-    els.expires.value = stored.expires ?? '';
-    els.branch.value = stored.branch || config.public.branch;
   }
 
   els.tokenForm.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const token = els.token.value.trim();
     if (!token) return;
-    const branch = els.branch.value.trim() || config.public.branch;
     els.tokenStatus.textContent = 'Checking the token against both repositories…';
     els.tokenStatus.className = 'muted';
     try {
-      await checkAccess(fetchFn, token, { ...config.public, branch });
-      const priv = await checkAccess(fetchFn, token, { ...config.private, branch });
+      await checkAccess(fetchFn, token, config.public);
+      const priv = await checkAccess(fetchFn, token, config.private);
       if (!priv.private) throw new Error(`${config.private.repo} is not private - stop and check`);
     } catch (e) {
       els.tokenStatus.textContent = `Not saved: ${describe(e)}`;
       els.tokenStatus.className = 'bad';
       return;
     }
-    writeStored({
-      token,
-      savedAt: new Date().toISOString(),
-      expires: els.expires.value || undefined,
-      branch: branch === config.public.branch ? undefined : branch,
-    });
+    writeStored({ token, savedAt: new Date().toISOString() });
     els.token.value = '';
     els.tokenStatus.textContent = 'Saved. It stays in this browser only.';
     els.tokenStatus.className = 'ok';
     paintSetup();
     els.setup.open = false;
+    if (els.status.querySelector('[data-nag]')) {
+      els.status.innerHTML = '<p class="muted">Token saved. Tap Save to log the day.</p>';
+    }
     void refresh();
   });
 

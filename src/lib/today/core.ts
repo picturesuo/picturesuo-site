@@ -176,6 +176,23 @@ export function privateNote(entry: Entry, note: string): string {
   return `${lines.join('\n')}\n`;
 }
 
+/** The line back out of a private note file; '' when there is none. */
+export function noteBody(text: string): string {
+  const close = text.startsWith('---\n') ? text.indexOf('\n---\n', 4) : -1;
+  const after = close < 0 ? text : text.slice(close + 5);
+  const body = after.replace(/^\s*# \S+\s*/, '').trim();
+  return body === '_No note._' ? '' : body;
+}
+
+/**
+ * What to commit for a day's private note: the typed line if there is one,
+ * otherwise the line already in the file. A blank field means "leave the
+ * note alone", so a correction to the counts never erases the words.
+ */
+export function mergePrivateNote(entry: Entry, typed: string, current: string | null): string {
+  return privateNote(entry, typed.trim() || (current ? noteBody(current) : ''));
+}
+
 export function commitMessage(date: string, replacing: boolean): string {
   return `${replacing ? 'Update' : 'Log'} ${date}`;
 }

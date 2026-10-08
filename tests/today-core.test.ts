@@ -5,6 +5,8 @@ import {
   isBlank,
   localDate,
   makeEntry,
+  mergePrivateNote,
+  noteBody,
   parseLog,
   privateNote,
   privateNotePath,
@@ -142,6 +144,33 @@ test('the private note carries the counts and the line, and has a stable path', 
   assert.match(text, /^---\ndate: 2026-10-06\nprivate: true\nwriting: 2\n/);
   assert.match(text, /\nflag: false\n---\n\n# 2026-10-06\n\nthrew two bowls, both slumped\n$/);
   assert.match(privateNote(e, ''), /_No note\._\n$/);
+});
+
+test('noteBody reads the line back out of a private note', () => {
+  const e = makeEntry('2026-10-06', { writing: 2, tech: 0, clay: 1, photos: 0, posts: 0 }, false);
+  assert.equal(noteBody(privateNote(e, 'threw two bowls')), 'threw two bowls');
+  assert.equal(noteBody(privateNote(e, '')), '');
+  assert.equal(noteBody('just words, no front matter\n'), 'just words, no front matter');
+});
+
+test('updating the counts with a blank field keeps the saved line', () => {
+  const morning = makeEntry(
+    '2026-10-07',
+    { writing: 1, tech: 0, clay: 0, photos: 0, posts: 0 },
+    false,
+  );
+  const saved = mergePrivateNote(morning, 'threw two bowls', null);
+  const evening = makeEntry(
+    '2026-10-07',
+    { writing: 2, tech: 0, clay: 0, photos: 0, posts: 0 },
+    true,
+  );
+  const updated = mergePrivateNote(evening, '', saved);
+  assert.match(updated, /\nwriting: 2\n/);
+  assert.match(updated, /\nflag: true\n/);
+  assert.match(updated, /\n\nthrew two bowls\n$/);
+  assert.match(mergePrivateNote(evening, '  glazed instead  ', saved), /\n\nglazed instead\n$/);
+  assert.match(mergePrivateNote(evening, '', null), /_No note\._\n$/);
 });
 
 test('commit messages name the day and whether it is a correction', () => {

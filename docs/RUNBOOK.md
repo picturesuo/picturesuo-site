@@ -13,8 +13,9 @@ repositories, nothing else.
 
 1. GitHub → profile picture → **Settings** → **Developer settings** →
    **Personal access tokens** → **Fine-grained tokens** → **Generate new token**
-2. **Token name:** `phone check-in`. **Expiration:** 90 days is a good habit;
-   the page will nag you a week before it runs out if you type the date in.
+2. **Token name:** `phone check-in`. **Expiration:** 90 days is a good habit.
+   When it runs out the page says "GitHub rejected the token" and you paste a
+   new one in the same place.
 3. **Resource owner:** picturesuo. **Repository access:** *Only select
    repositories* → pick `picturesuo-site` and `picturesuo-life-log`. Nothing
    else.
@@ -23,9 +24,9 @@ repositories, nothing else.
    GitHub automatically and is read-only.
 5. **Generate token**, copy it.
 6. On the phone, open picturesuo.com/today/, enter the site password, scroll to
-   **Device setup**, paste the token, type the expiry date, tap **Check and
-   save on this device**. The page reads both repositories to prove the token
-   works before it keeps it, and refuses if the life-log is not private.
+   **Device setup**, paste the token, tap **Check and save on this device**.
+   The page reads both repositories to prove the token works before it keeps
+   it, and refuses if the life-log is not private.
 
 Then the morning is: open the page, tap, Save. Counts go to
 `src/data/log.json` in this repo (one commit, that one file); the counts plus
@@ -33,7 +34,9 @@ the line go to `checkins/YYYY-MM-DD.md` in the private repo (one commit, that
 one file). The calendar at `/progress/` picks the day up on the next deploy,
 which the commit itself triggers. A skipped day is never filled in with zeros:
 the page only writes the day you are looking at when you tap Save. Saving five
-zeros on purpose is allowed and records a zero day.
+zeros on purpose is allowed and records a zero day. Saving a day again
+replaces its counts and keeps the line you already wrote unless you type a
+new one.
 
 **What the token can and cannot do.** It is stored in the phone browser's
 localStorage for picturesuo.com, in the clear. The site password gates the
@@ -49,8 +52,6 @@ nothing else: no settings, no secrets, no other repository, no account.
   token**. (Or clear site data for picturesuo.com.)
 - **Expired:** the page says "GitHub rejected the token"; generate a new one
   and paste it in the same place. The old one is already dead.
-- **Branch:** the *Branch* field exists so a test token can write to a scratch
-  branch. Leave it as `main`.
 
 ### 0b. Register the evening nudge (2 minutes, once)
 

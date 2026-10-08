@@ -22,7 +22,7 @@ const config = {
     <script is:inline type="application/json" data-log set:html={JSON.stringify(log)} />
 
     <header class="article-header">
-      <p class="page-kicker">Today · <span data-day-label>…</span></p>
+      <p class="page-kicker" data-day-label>Today</p>
       <h1>What happened?</h1>
     </header>
 
@@ -37,13 +37,6 @@ const config = {
     </section>
 
     <form class="checkin" data-form>
-      <div class="dayswitch" role="group" aria-label="Which day">
-        <button type="button" class="day on" data-day="today" aria-pressed="true">Today</button>
-        <button type="button" class="day" data-day="yesterday" aria-pressed="false"
-          >Yesterday</button
-        >
-      </div>
-
       <div class="rows" data-rows></div>
 
       <label class="flagline">
@@ -79,14 +72,6 @@ const config = {
         <label>
           <span>Token</span>
           <input type="password" data-token autocomplete="off" spellcheck="false" />
-        </label>
-        <label>
-          <span>Expires (optional, so the page can warn you)</span>
-          <input type="date" data-expires />
-        </label>
-        <label>
-          <span>Branch (leave as main)</span>
-          <input type="text" data-branch autocomplete="off" spellcheck="false" />
         </label>
         <div class="setup-actions">
           <button type="submit" class="button">Check and save on this device</button>
@@ -150,9 +135,6 @@ const config = {
     overflow: hidden;
     cursor: default;
   }
-  .strip :global(.cell:not(:disabled)) {
-    cursor: pointer;
-  }
   .strip :global(.cell .fill) {
     position: absolute;
     inset: 0;
@@ -178,13 +160,6 @@ const config = {
   }
   .strip :global(.cell.today) {
     box-shadow: inset 0 0 0 2px var(--ink);
-  }
-  .strip :global(.cell.picked:not(.today)) {
-    box-shadow: inset 0 0 0 2px var(--muted);
-  }
-  .strip :global(.cell:focus-visible) {
-    outline: 2px solid var(--blue);
-    outline-offset: 2px;
   }
   .strip :global(.cell.flag)::after {
     content: '';
@@ -223,28 +198,6 @@ const config = {
 
   .checkin {
     margin-top: 1.25rem;
-  }
-  .dayswitch {
-    display: inline-flex;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 3px;
-    margin-bottom: 1rem;
-  }
-  .day {
-    font: inherit;
-    font-size: 0.9rem;
-    color: var(--muted);
-    background: transparent;
-    border: 0;
-    border-radius: 999px;
-    padding: 0.4rem 1rem;
-    min-height: 44px;
-    cursor: pointer;
-  }
-  .day.on {
-    color: var(--paper);
-    background: var(--ink);
   }
   .rows {
     display: grid;
@@ -376,8 +329,7 @@ const config = {
     color: var(--coral);
   }
   .status :global(.bad),
-  .tokenstatus.bad,
-  .setup em.bad {
+  .tokenstatus.bad {
     color: var(--coral);
   }
   .status :global(.muted),
