@@ -218,8 +218,14 @@ test('an unchanged prefill keeps a note edited by hand after the page loaded', (
     noteBody(mergePrivateNote(evening, `${prefill} `, prefill, handEdited)),
     'threw two bowls\n\nboth slumped',
   );
-  assert.equal(noteBody(mergePrivateNote(evening, '', prefill, handEdited)), 'threw two bowls\n\nboth slumped');
-  assert.equal(noteBody(mergePrivateNote(evening, 'glazed three', prefill, handEdited)), 'glazed three');
+  assert.equal(
+    noteBody(mergePrivateNote(evening, '', prefill, handEdited)),
+    'threw two bowls\n\nboth slumped',
+  );
+  assert.equal(
+    noteBody(mergePrivateNote(evening, 'glazed three', prefill, handEdited)),
+    'glazed three',
+  );
 });
 
 test('a field is untouched while it holds what the page put there', () => {

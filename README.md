@@ -13,6 +13,7 @@ Before publishing:
 
 ```bash
 npm run format:check
+npm test
 npm run build
 ```
 

@@ -2,7 +2,7 @@
 
 Everything that still needs human hands, and everything that does not.
 
-## The two things only you can do
+## The things only you can do
 
 ### 0. Put a GitHub token on your phone for the check-in (5 minutes, once per phone)
 
@@ -79,8 +79,9 @@ your ChatGPT account.
 3. Paste the prompt from `picturesuo-life-log/chatgpt-automation.md`
 4. Save
 
-A local task already does the same thing at 08:04 without the app. Run both and
-you get asked twice — pick one.
+Until `/today/` is live, a local task does the same thing at 08:04 without the
+app; run both and you get asked twice, so pick one. Once the page is live that
+task opens the check-in instead (see 0b).
 
 ### 2. DNS redundancy (5 minutes, optional)
 

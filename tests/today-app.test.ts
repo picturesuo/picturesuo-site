@@ -108,7 +108,11 @@ async function openLoggedDay(body: string) {
   const restore = installDom({
     'picturesuo.today': JSON.stringify({ token: 't', savedAt: '2026-10-08T07:00:00Z' }),
   });
-  const entry = makeEntry(localDate(), { writing: 1, tech: 0, clay: 0, photos: 0, posts: 0 }, false);
+  const entry = makeEntry(
+    localDate(),
+    { writing: 1, tech: 0, clay: 0, photos: 0, posts: 0 },
+    false,
+  );
   const gh = github(serializeLog([entry]), privateNote(entry, body));
   const realFetch = globalThis.fetch;
   globalThis.fetch = gh.fetch as typeof fetch;

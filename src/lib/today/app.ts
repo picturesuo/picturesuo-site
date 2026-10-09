@@ -168,9 +168,9 @@ export function mount(root: HTMLElement, config: Config, initialLog: Entry[]): v
     // as a zero day, deliberately. What never happens is the page writing a
     // zero row for a day you skipped.
     const zero = isBlank({ ...counts, flag }) ? ' as a zero day' : '';
-    for (const c of els.form.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement>(
-      'button, input, textarea',
-    )) {
+    for (const c of els.form.querySelectorAll<
+      HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement
+    >('button, input, textarea')) {
       c.disabled = saving;
     }
     els.gapButton.disabled = saving;
