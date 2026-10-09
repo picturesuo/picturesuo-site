@@ -86,6 +86,7 @@ input {
   border-bottom: 1px solid var(--line);
 }
 .wordmark {
+  white-space: nowrap;
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 1.22rem;
   font-weight: 700;

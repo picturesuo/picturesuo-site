@@ -2,12 +2,16 @@
 
 Three cadences, three shapes. Nothing here publishes on its own.
 
-## 1. Daily — the card
+## 1. Daily — the card, and the check-in
 
 The 3×5 card. Front is what you planned, back is what actually happened. It
 stays private: only five counts and an anti-goal flag ever reach the public
-calendar at `/progress/`, through `counts:export` in the life-log repo. The card
-text itself never leaves that repository.
+calendar at `/progress/`. The card text itself never leaves the life-log repo.
+
+The counts get there from the phone: `/today/` is a check-in page, five taps
+and Save, that commits `src/data/log.json` here and the full record (counts
+plus one private line) to the life-log. Setup is in `RUNBOOK.md`. A day you
+do not log stays blank; the page never writes a day you did not save.
 
 ## 2. Weekly — the week note
 
